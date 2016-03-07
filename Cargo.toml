@@ -1,0 +1,7 @@
+[package]
+name = "mail"
+version = "0.1.0"
+authors = ["Ryan Michael <kerinin@gmail.com>"]
+
+[dependencies]
+chomp = "*"
