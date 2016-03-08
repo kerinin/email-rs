@@ -23,6 +23,11 @@ pub fn crlf(i: Input<u8>) -> U8Result<&[u8]> {
 pub fn wsp(i: Input<u8>) -> U8Result<u8> {
     satisfy(i, |i| (i == 32) || (i == 9))
 }
+
+pub fn digit(i: Input<u8>) -> U8Result<u8> {
+    satisfy(i, |i| 30 <= i && i <= 39)
+}
+
 // US-ASCII control characters that do not include the carriage return, 
 // line feed, and white space characters
 // NO-WS-CTL = %d1-8 / %d11 / %d12 / %d14-31 / %d127

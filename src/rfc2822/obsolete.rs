@@ -1,5 +1,8 @@
 use chomp::*;
 
+use util::*;
+use rfc2822::*;
+use rfc2822::datetime::*;
 use rfc2822::folding::*;
 use rfc2822::misc::*;
 use rfc2822::primitive::*;
@@ -77,4 +80,51 @@ pub fn obs_phrase(i: Input<u8>) -> U8Result<Vec<u8>> {
             acc
         })
     })
+}
+
+// obs-day-of-week = [CFWS] day-name [CFWS]
+pub fn obs_day_of_week(i: Input<u8>) -> U8Result<Day> {
+    parse!{i;
+        option(cfws, ());
+        let d = day_name();
+        option(cfws, ());
+
+        ret d
+    }
+}
+
+// obs-day = [CFWS] 1*2DIGIT [CFWS]
+pub fn obs_day(i: Input<u8>) -> U8Result<usize> {
+    parse!{i;
+        option(cfws, ());
+        let n = parse_digits((1..3));
+        option(cfws, ());
+
+        ret n
+    }
+}
+
+// obs-month = CFWS month-name CFWS
+pub fn obs_month(i: Input<u8>) -> U8Result<Month> {
+    parse!{i;
+        option(cfws, ());
+        let m = month_name();
+        option(cfws, ());
+
+        ret m
+    }
+}
+
+// obs-year = [CFWS] 2*DIGIT [CFWS]
+pub fn obs_year(i: Input<u8>) -> U8Result<usize> {
+    parse!{i;
+        option(cfws, ());
+        let y = or(
+            |i| parse_digits(i, (2..)),
+            |i| obs_year(i),
+            );
+        option(cfws, ());
+
+        ret y
+    }
 }

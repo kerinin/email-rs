@@ -2,8 +2,10 @@
 
 #[macro_use]
 extern crate chomp;
+extern crate chrono;
 
 mod rfc2822;
+mod util;
 
 /*
    struct Message {
