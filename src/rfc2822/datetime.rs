@@ -28,7 +28,7 @@ pub fn day_of_week(i: Input<u8>) -> U8Result<Day> {
                 option(fws, ());
                 day_name()
             }},
-            |i| obs_day_of_week(i),
+            obs_day_of_week,
             )
     }
 }
@@ -41,7 +41,7 @@ pub fn day(i: Input<u8>) -> U8Result<usize> {
                 option(fws, ());
                 parse_digits((1..3))
             }},
-            |i| obs_day(i),
+            obs_day,
             )
     }
 }
@@ -75,7 +75,7 @@ pub fn month(i: Input<u8>) -> U8Result<Month> {
 
                 ret m
             }},
-            |i| obs_month(i),
+            obs_month,
             )
     }
 }
@@ -85,7 +85,7 @@ pub fn year(i: Input<u8>) -> U8Result<usize> {
     parse!{i;
         or(
             |i| parse_digits(i, (4..)),
-            |i| obs_year(i),
+            obs_year,
             )
     }
 }
@@ -102,6 +102,14 @@ pub fn date(i: Input<u8>) -> U8Result<chrono::Date<chrono::UTC>> {
 }
 
 // hour = 2DIGIT / obs-hour
+pub fn hour(i: Input<u8>) -> U8Result<usize> {
+    parse!{i;
+        or(
+            |i| parse_digits(i, 2),
+            obs_hour,
+            )
+    }
+}
 
 // time-of-day = hour ":" minute [ ":" second ]
 

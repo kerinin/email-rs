@@ -41,6 +41,6 @@ pub fn text(i: Input<u8>) -> U8Result<u8> {
     parse!{i;
         or( 
             |i| satisfy(i, |c| (1 <= c && c <= 9) || (c == 11) || (c == 12) || (14 <= c && c <= 127)),
-            |i| obs_text(i),
+            obs_text,
             )}
 }

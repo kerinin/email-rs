@@ -11,14 +11,14 @@ pub fn fws(i: Input<u8>) -> U8Result<()> {
     or(i,
        |i| { parse!{i;
            option(|i| { parse!{i;
-               skip_many(|i| wsp(i));
+               skip_many(wsp);
                crlf();
 
                ret ()
            }}, ());
-           skip_many1(|i| wsp(i));
+           skip_many1(wsp);
        }},
-       |i| obs_fws(i),
+       obs_fws,
        )
 }
 
@@ -39,10 +39,10 @@ pub fn comment(i: Input<u8>) -> U8Result<()> {
     parse!{i;
         token(b'(');
         skip_many(|i| { parse!{i;
-            option(|i| fws(i), ());
+            option(fws, ());
             ccontent()
         }} );
-        option(|i| fws(i), ());
+        option(fws, ());
         token(b')');
 
         ret ()
@@ -57,7 +57,7 @@ pub fn ccontent(i: Input<u8>) -> U8Result<()> {
        |i| {
            or(i,
               |i| quoted_pair(i).then(|i| i.ret(())),
-              |i| comment(i),
+              comment,
               )
        },)
 }
@@ -75,7 +75,7 @@ pub fn cfws(i: Input<u8>) -> U8Result<()> {
                 option(fws, ());
                 comment();
             }},
-            |i| fws(i)
-          )
+            fws,
+            )
     }
 }

@@ -16,7 +16,7 @@ pub fn word(i: Input<u8>) -> U8Result<Vec<u8>> {
                v
            })
        },
-       |i| quoted_string(i),
+       quoted_string,
        )
 }
 
@@ -24,11 +24,11 @@ pub fn word(i: Input<u8>) -> U8Result<Vec<u8>> {
 pub fn phrase(i: Input<u8>) -> U8Result<Vec<u8>> {
     or(i,
        |i| { parse!{i;
-           let wv: Vec<Vec<u8>> = many1(|i| word(i));
+           let wv: Vec<Vec<u8>> = many1(word);
 
            ret wv.into_iter().flat_map(|i| i).collect()
        }},
-       |i| obs_phrase(i),
+       obs_phrase,
        )
 }
 
@@ -38,10 +38,10 @@ pub fn phrase(i: Input<u8>) -> U8Result<Vec<u8>> {
 //                         obs-utext
 pub fn utext(i: Input<u8>) -> U8Result<u8> {
     or(i,
-       |i| no_ws_ctl(i),
+       no_ws_ctl,
        |i| or(i,
               |i| satisfy(i, |i| (33 <= i && i <= 126)),
-              |i| obs_text(i), // technically this is obs-utext, but it's an alias so whatevs
+              obs_text, // technically this is obs-utext, but it's an alias so whatevs
              ))
 }
 

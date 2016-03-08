@@ -26,11 +26,11 @@ pub fn test_obs_char() {
 // obs-char repeat
 pub fn obs_text(i: Input<u8>) -> U8Result<u8> {
     parse!{i;
-        skip_many(|i| lf(i));
-        skip_many(|i| cr(i));
+        skip_many(lf);
+        skip_many(cr);
         let c = obs_char();
-        skip_many(|i| lf(i));
-        skip_many(|i| cr(i));
+        skip_many(lf);
+        skip_many(cr);
 
         ret c
     }
@@ -49,10 +49,10 @@ pub fn obs_qp(i: Input<u8>) -> U8Result<u8> {
 // Consumes matches & returns ()
 pub fn obs_fws(i: Input<u8>) -> U8Result<()> {
     parse!{i;
-        skip_many1(|i| wsp(i));
+        skip_many1(wsp);
         skip_many(|i| parse!{i;
             crlf();
-            skip_many1(|i| wsp(i));
+            skip_many1(wsp);
         })
     }
 }
@@ -63,7 +63,7 @@ pub fn obs_phrase(i: Input<u8>) -> U8Result<Vec<u8>> {
         let w1: Vec<u8> = word();
         let wv: Vec<Vec<u8>> = many(|i| {
             or(i,
-               |i| word(i),
+               word,
                |i| or(i,
                       |i| token(i, b'.').map(|_| vec!(b'.')),
                       |i| cfws(i).map(|_| vec!()),
@@ -121,10 +121,21 @@ pub fn obs_year(i: Input<u8>) -> U8Result<usize> {
         option(cfws, ());
         let y = or(
             |i| parse_digits(i, (2..)),
-            |i| obs_year(i),
+            obs_year,
             );
         option(cfws, ());
 
         ret y
+    }
+}
+
+// obs-hour = [CFWS] 2DIGIT [CFWS]
+pub fn obs_hour(i: Input<u8>) -> U8Result<usize> {
+    parse!{i;
+        option(cfws, ());
+        let n = parse_digits(2);
+        option(cfws, ());
+
+        ret n
     }
 }

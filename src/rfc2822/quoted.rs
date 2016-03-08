@@ -10,7 +10,7 @@ pub fn quoted_pair(i: Input<u8>) -> U8Result<u8> {
     parse!{i;
         or( 
             |i| parse!{i; token(b'\\') >> text() },
-            |i| obs_qp(i),
+            obs_qp,
             )}
 }
 
@@ -43,10 +43,10 @@ pub fn qcontent(i: Input<u8>) -> U8Result<u8> {
 //                         [CFWS]
 pub fn quoted_string(i: Input<u8>) -> U8Result<Vec<u8>> {
     parse!{i;
-        option(|i| cfws(i), ());
+        option(cfws, ());
         dquote();
-        let c = many(|i| parse!{i; option(|i| fws(i), ()) >> qcontent()});
-        option(|i| fws(i), ());
+        let c = many(|i| parse!{i; option(fws, ()) >> qcontent()});
+        option(fws, ());
         dquote();
 
         ret c
