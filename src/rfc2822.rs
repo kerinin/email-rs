@@ -13,6 +13,10 @@ fn lf(i: Input<u8>) -> U8Result<u8> {
     satisfy(i, |i| i == 10)
 }
 
+fn dquote(i: Input<u8>) -> U8Result<u8> {
+    satisfy(i, |i| i == 34)
+}
+
 fn crlf(i: Input<u8>) -> U8Result<&[u8]> {
     string(i, &[13,10][..])
 }
@@ -42,43 +46,30 @@ fn test_obs_char() {
 }
 
 // obs-text = *LF *CR *(obs-char *LF *CR)
-fn obs_text(i: Input<u8>) -> U8Result<&[u8]> {
-    matched_by(i, |i| {
-        parse!{i;
-            skip_many(|i| lf(i));
-            skip_many(|i| cr(i));
-            skip_many(|i| parse!{i;
-                skip_many1(|i| obs_char(i));
-                skip_many(|i| lf(i));
-                skip_many(|i| cr(i));
-            })
-        }
-    }).map(|(v, _)| v)
-}
+//
+// NOTE: I think this is a flaw in the spec - it leaks
+// matches to *(%0-9 / %11 / %12 / %14-127).  This matcher eliminates the 
+// obs-char repeat
+fn obs_text(i: Input<u8>) -> U8Result<u8> {
+    parse!{i;
+        skip_many(|i| lf(i));
+        skip_many(|i| cr(i));
+        let c = obs_char();
+        skip_many(|i| lf(i));
+        skip_many(|i| cr(i));
 
-#[test]
-fn test_obs_text() {
-    assert_eq!(parse_only(obs_text, &[10,10,13,13,1,2,3,10,10,13,13,1,2,3][..]), Ok(&[10,10,13,13,1,2,3,10,10,13,13,1,2,3][..]));
+        ret c
+    }
 }
 
 // Characters excluding CR and LF
 // text = %d1-9 / %d11 / %d12 / %d14-127 / obs-text 
-//
-// NOTE: I think this is a flaw in the spec - the `obs_text` alternate leaks
-// matches to *(%0-9 / %11 / %12 / %14-127).  This parser should probably yield
-// U8Result<u8>
-fn text(i: Input<u8>) -> U8Result<&[u8]> {
-    matched_by(i, |i| {
-        parse!{i;
-            or( 
-                |i| { parse!{i;
-                    satisfy(|c| (1 <= c && c <= 9) || (c == 11) || (c == 12) || (14 <= c && c <= 127));
-                    take(1)
-                }},
-                |i| obs_text(i)
-              )
-        }
-    }).map(|(v, _)| v)
+fn text(i: Input<u8>) -> U8Result<u8> {
+    parse!{i;
+        or( 
+            |i| satisfy(i, |c| (1 <= c && c <= 9) || (c == 11) || (c == 12) || (14 <= c && c <= 127)),
+            |i| obs_text(i),
+            )}
 }
 
 // obs-qp = "\" (%d0-127)
@@ -92,19 +83,12 @@ fn obs_qp(i: Input<u8>) -> U8Result<u8> {
 
 // quoted-pair = ("\" text) / obs-qp
 // Consumes & returns matches
-fn quoted_pair(i: Input<u8>) -> U8Result<&[u8]> {
+fn quoted_pair(i: Input<u8>) -> U8Result<u8> {
     parse!{i;
         or( 
-            |i| { parse!{i;
-                token(b'\\');
-                text()
-            }},
-            |i| { parse!{i;
-                obs_qp();
-                take(1)
-            }},
-            )
-    }
+            |i| parse!{i; token(b'\\') >> text() },
+            |i| obs_qp(i),
+            )}
 }
 
 #[test]
@@ -264,5 +248,117 @@ fn dot_atom(i: Input<u8>) -> U8Result<&[u8]> {
         option(|i| cfws(i), ());
 
         ret a.0
+    }
+}
+
+
+// qtext           =       NO-WS-CTL /     ; Non white space controls
+//
+//                         %d33 /          ; The rest of the US-ASCII
+//                         %d35-91 /       ;  characters not including "\"
+//                         %d93-126        ;  or the quote character
+fn qtext(i: Input<u8>) -> U8Result<u8> {
+    parse!{i;
+        no_ws_ctl() <|> 
+            satisfy(|i| (i == 33) || (35 <= i && i <= 91) || (93 <= i && i <= 126))
+    }
+}
+
+// qcontent = qtext / quoted-pair
+fn qcontent(i: Input<u8>) -> U8Result<u8> {
+    parse!{i;
+        qtext() <|> quoted_pair()
+    }
+}
+
+// quoted-string   =       [CFWS]
+//                         DQUOTE *([FWS] qcontent) [FWS] DQUOTE
+//                         [CFWS]
+fn quoted_string(i: Input<u8>) -> U8Result<Vec<u8>> {
+    parse!{i;
+        option(|i| cfws(i), ());
+        dquote();
+        let c = many(|i| parse!{i; option(|i| fws(i), ()) >> qcontent()});
+        option(|i| fws(i), ());
+        dquote();
+
+        ret c
+    }
+}
+
+// word = atom / quoted-string
+fn word(i: Input<u8>) -> U8Result<Vec<u8>> {
+    or(i,
+       |i| {
+           atom(i).map(|i| {
+               let mut v = Vec::with_capacity(i.len());
+               v.extend(i);
+               v
+           })
+       },
+       |i| quoted_string(i),
+       )
+}
+
+// obs-phrase = word *(word / "." / CFWS)
+fn obs_phrase(i: Input<u8>) -> U8Result<Vec<u8>> {
+    let r = parse!{i;
+        let w1: Vec<u8> = word();
+        let wv: Vec<Vec<u8>> = many(|i| {
+            or(i,
+               |i| word(i),
+               |i| or(i,
+                      |i| token(i, b'.').map(|_| vec!(b'.')),
+                      |i| cfws(i).map(|_| vec!()),
+                      )
+              )
+        });
+
+        ret (w1, wv)
+    };
+
+    r.map(|(w1, wv)| {
+        wv.into_iter().fold(w1, |mut acc, mut wn| {
+            acc.append(&mut wn);
+            acc
+        })
+    })
+}
+
+// phrase = 1*word / obs-phrase
+fn phrase(i: Input<u8>) -> U8Result<Vec<u8>> {
+    or(i,
+       |i| { parse!{i;
+           let wv: Vec<Vec<u8>> = many1(|i| word(i));
+
+           ret wv.into_iter().flat_map(|i| i).collect()
+       }},
+       |i| obs_phrase(i),
+       )
+}
+
+
+// utext           =       NO-WS-CTL /     ; Non white space controls
+//                         %d33-126 /      ; The rest of US-ASCII
+//                         obs-utext
+fn utext(i: Input<u8>) -> U8Result<u8> {
+    or(i,
+       |i| no_ws_ctl(i),
+       |i| or(i,
+              |i| satisfy(i, |i| (33 <= i && i <= 126)),
+              |i| obs_text(i), // technically this is obs-utext, but it's an alias so whatevs
+             ))
+}
+
+// unstructured = *([FWS] utext) [FWS]
+fn unstructured(i: Input<u8>) -> U8Result<Vec<u8>> {
+    parse!{i;
+        let t = many(|i| { parse!{i;
+            option(fws, ());
+            utext()
+        }});
+        option(fws, ());
+
+        ret t
     }
 }
