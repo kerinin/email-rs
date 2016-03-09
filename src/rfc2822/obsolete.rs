@@ -3,6 +3,8 @@ use chrono::offset::fixed::FixedOffset;
 
 use util::*;
 use rfc2822::*;
+use rfc2822::address::*;
+use rfc2822::atom::*;
 use rfc2822::datetime::*;
 use rfc2822::folding::*;
 use rfc2822::misc::*;
@@ -198,4 +200,55 @@ pub fn obs_zone(i: Input<u8>) -> U8Result<FixedOffset> {
     |i| or(i, |i| satisfy(i, |i| 107 <= i && i <= 122).then(|i| i.ret(0)),
     |i| skip_many1(i, alpha).then(|i| i.ret(0)),
     )))))))))))))).map(|o| FixedOffset::west(o))
+}
+
+// obs-local-part = word *("." word)
+pub fn obs_local_part(i: Input<u8>) -> U8Result<&[u8]> {
+    matched_by(i, |i| { parse!{i;
+        word();
+        skip_many(|i| parse!{i;
+            token(b'.');
+            word();
+
+            ret ()
+        });
+
+        ret ()
+    }}).bind(|i, v| i.ret(v.0))
+}
+
+// obs-domain = atom *("." atom)
+pub fn obs_domain(i: Input<u8>) -> U8Result<&[u8]> {
+    matched_by(i, |i| { parse!{i;
+        atom();
+        skip_many(|i| { parse!{i;
+            token(b'.');
+            atom();
+
+            ret ()
+        }});
+    }}).map(|(v, _)| v)
+}
+
+// obs-mbox-list = 1*([mailbox] [CFWS] "," [CFWS]) [mailbox]
+pub fn obs_mbox_list(i: Input<u8>) -> U8Result<Vec<Address>> {
+    let r = parse!{i;
+        let an:Vec<Option<Address>> = many1(|i| { parse!{i;
+            let m: Option<Address> = option(|i| mailbox(i).map(|i| Some(i)), None);
+            option(cfws, ());
+            token(b',');
+            option(cfws, ());
+
+            ret m
+        }});
+
+        let a: Option<Address> = option(|i| mailbox(i).map(|i| Some(i)), None);
+
+        ret (an, a)
+    };
+
+    r.map(|(mut an, a)| {
+        an.push(a);
+        an.into_iter().filter(|i| *i != None).map(|i| i.unwrap()).collect()
+    })
 }
