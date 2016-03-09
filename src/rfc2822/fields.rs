@@ -5,6 +5,7 @@ use rfc2822::address::*;
 use rfc2822::atom::*;
 use rfc2822::datetime::*;
 use rfc2822::folding::*;
+use rfc2822::misc::*;
 use rfc2822::obsolete::*;
 use rfc2822::primitive::*;
 use rfc2822::quoted::*;
@@ -170,14 +171,59 @@ pub fn message_id(i: Input<u8>) -> U8Result<Field> {
 }
 
 // in-reply-to     =       "In-Reply-To:" 1*msg-id CRLF
+pub fn in_reply_to(i: Input<u8>) -> U8Result<Field> {
+    parse!{i;
+        string(b"In-Reply-To:");
+        let ids = many1(msg_id);
+        crlf();
+
+        ret Field::InReplyTo(ids)
+    }
+}
 
 // references      =       "References:" 1*msg-id CRLF
+pub fn references(i: Input<u8>) -> U8Result<Field> {
+    parse!{i;
+        string(b"References:");
+        let ids = many1(msg_id);
+        crlf();
+
+        ret Field::References(ids)
+    }
+}
 
 // subject         =       "Subject:" unstructured CRLF
+pub fn subject(i: Input<u8>) -> U8Result<Field> {
+    parse!{i;
+        string(b"Subject:");
+        let u = unstructured();
+        crlf();
+
+        ret Field::Subject(u)
+    }
+}
 
 // comments        =       "Comments:" unstructured CRLF
+pub fn comments(i: Input<u8>) -> U8Result<Field> {
+    parse!{i;
+        string(b"Comments:");
+        let u = unstructured();
+        crlf();
+
+        ret Field::Comments(u)
+    }
+}
 
 // keywords        =       "Keywords:" phrase *("," phrase) CRLF
+pub fn keywords(i: Input<u8>) -> U8Result<Field> {
+    parse!{i;
+        string(b"Keywords:");
+        let kws = sep_by1(phrase, |i| token(i, b',')); 
+        crlf();
+
+        ret Field::Keywords(kws)
+    }
+}
 
 // resent-date     =       "Resent-Date:" date-time CRLF
 

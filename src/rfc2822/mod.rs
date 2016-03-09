@@ -38,4 +38,9 @@ pub enum Field {
     Cc(Vec<Address>),
     Bcc(Vec<Address>),
     MessageID(Vec<u8>),
+    InReplyTo(Vec<Vec<u8>>),
+    References(Vec<Vec<u8>>),
+    Subject(Vec<u8>),
+    Comments(Vec<u8>),
+    Keywords(Vec<Vec<u8>>),
 }
