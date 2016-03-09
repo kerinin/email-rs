@@ -252,3 +252,36 @@ pub fn obs_mbox_list(i: Input<u8>) -> U8Result<Vec<Address>> {
         an.into_iter().filter(|i| *i != None).map(|i| i.unwrap()).collect()
     })
 }
+
+// obs-addr-list   =       1*([address] [CFWS] "," [CFWS]) [address]
+pub fn obs_addr_list(i: Input<u8>) -> U8Result<Vec<Address>> {
+    let r = parse!{i;
+        let an:Vec<Option<Address>> = many1(|i| { parse!{i;
+            let m: Option<Address> = option(|i| address(i).map(|i| Some(i)), None);
+            option(cfws, ());
+            token(b',');
+            option(cfws, ());
+
+            ret m
+        }});
+
+        let a: Option<Address> = option(|i| address(i).map(|i| Some(i)), None);
+
+        ret (an, a)
+    };
+
+    r.map(|(mut an, a)| {
+        an.push(a);
+        an.into_iter().filter(|i| *i != None).map(|i| i.unwrap()).collect()
+    })
+}
+
+// obs-id-left     =       local-part
+pub fn obs_id_left(i: Input<u8>) -> U8Result<Vec<u8>> {
+    local_part(i)
+}
+
+// obs-id-right    =       domain
+pub fn obs_id_right(i: Input<u8>) -> U8Result<Vec<u8>> {
+    domain(i)
+}

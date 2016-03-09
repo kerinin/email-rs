@@ -60,13 +60,13 @@ pub fn domain_literal(i: Input<u8>) -> U8Result<Vec<u8>> {
 }
 
 // domain = dot-atom / domain-literal / obs-domain
-pub fn domain(i: Input<u8>) -> U8Result<String> {
+pub fn domain(i: Input<u8>) -> U8Result<Vec<u8>> {
     or(i,
        |i| dot_atom(i).bind(|i, v| i.ret(FromIterator::from_iter(v.iter().map(|i| i.clone())))),
        |i| or(i,
               domain_literal,
               |i| obs_domain(i).bind(|i, v| i.ret(FromIterator::from_iter(v.iter().map(|i| i.clone())))),
-              )).map(|v| String::from_utf8(v).unwrap())
+              ))
 }
 
 // addr-spec = local-part "@" domain
@@ -77,7 +77,7 @@ pub fn addr_spec(i: Input<u8>) -> U8Result<Address> {
 
         ret Address::Mailbox{
             local_part: String::from_utf8(l).unwrap(), 
-            domain: d,
+            domain: String::from_utf8(d).unwrap(),
             display_name: None,
         }
     }
@@ -176,3 +176,7 @@ pub fn address(i: Input<u8>) -> U8Result<Address> {
     or(i, mailbox, group)
 }
 
+// address-list    =       (address *("," address)) / obs-addr-list
+pub fn address_list(i: Input<u8>) -> U8Result<Vec<Address>> {
+    or(i, |i| sep_by1(i, address, |i| token(i, b',')), obs_addr_list)
+}
