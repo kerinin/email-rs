@@ -1,6 +1,11 @@
 use chomp::*;
 use chrono;
 use chrono::offset::TimeZone;
+use chrono::naive::time::NaiveTime;
+use chrono::naive::date::NaiveDate;
+use chrono::naive::datetime::NaiveDateTime;
+use chrono::datetime::DateTime;
+use chrono::offset::fixed::FixedOffset;
 
 use util::*;
 use rfc2822::*;
@@ -91,13 +96,13 @@ pub fn year(i: Input<u8>) -> U8Result<usize> {
 }
 
 // date = day month year
-pub fn date(i: Input<u8>) -> U8Result<chrono::Date<chrono::UTC>> {
+pub fn date(i: Input<u8>) -> U8Result<NaiveDate> {
     parse!{i;
         let d = day();
         let m = month();
         let y = year();
 
-        ret chrono::UTC.ymd(y as i32, m as u32, d as u32)
+        ret NaiveDate::from_ymd(y as i32, m as u32, d as u32)
     }
 }
 
@@ -111,9 +116,82 @@ pub fn hour(i: Input<u8>) -> U8Result<usize> {
     }
 }
 
+// minute = 2DIGIT / obs-minute
+pub fn minute(i: Input<u8>) -> U8Result<usize> {
+    parse!{i;
+        or(
+            |i| parse_digits(i, 2),
+            obs_minute,
+            )
+    }
+}
+
+// second = 2DIGIT / obs-second
+pub fn second(i: Input<u8>) -> U8Result<usize> {
+    parse!{i;
+        or(
+            |i| parse_digits(i, 2),
+            obs_second,
+            )
+    }
+}
 // time-of-day = hour ":" minute [ ":" second ]
+pub fn time_of_day(i: Input<u8>) -> U8Result<NaiveTime> {
+    parse!{i;
+        let h = hour();
+        token(b':');
+        let m = minute();
+        let s = option(|i| { parse!{i;
+            token(b':');
+            second()
+        }}, 0);
+
+        ret NaiveTime::from_hms(h as u32, m as u32, s as u32)
+    }
+}
+
+// zone = (( "+" / "-" ) 4DIGIT) / obs-zone
+pub fn zone(i: Input<u8>) -> U8Result<FixedOffset> {
+    parse!{i;
+        or(
+            |i| { parse!{i;
+                let s = satisfy(|i| i == b'+' || i == b'-');
+                let n = parse_digits(4);
+
+                ret match s {
+                    b'+' => FixedOffset::east(n),
+                    _ => FixedOffset::west(n),
+                }
+            }},
+            obs_zone,
+            )
+    }
+}
 
 // time = time-of-day FWS zone
+pub fn time(i: Input<u8>) -> U8Result<(NaiveTime, FixedOffset)> {
+    parse!{i;
+        let t = time_of_day();
+        fws();
+        let z = zone();
+
+        ret (t, z)
+    }
+}
 
 // date-time = [ day-of-week "," ] date FWS time [CFWS]
-// pub fn quoted_string(i: Input<u8>) -> U8Result<Vec<u8>> {
+pub fn date_time(i: Input<u8>) -> U8Result<DateTime<FixedOffset>> {
+    parse!{i;
+        option(|i| parse!{i;
+            let d = day_of_week();
+            token(b',');
+
+            ret ()
+        }, ());
+        let d = date();
+        fws();
+        let t = time();
+
+        ret DateTime::from_utc(NaiveDateTime::new(d, t.0), t.1)
+    }
+}

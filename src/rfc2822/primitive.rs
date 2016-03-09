@@ -28,6 +28,10 @@ pub fn digit(i: Input<u8>) -> U8Result<u8> {
     satisfy(i, |i| 30 <= i && i <= 39)
 }
 
+pub fn alpha(i: Input<u8>) -> U8Result<u8> {
+    satisfy(i, |i| (65 <= i && i <= 90) || (97 <= i && i <= 122))
+}
+
 // US-ASCII control characters that do not include the carriage return, 
 // line feed, and white space characters
 // NO-WS-CTL = %d1-8 / %d11 / %d12 / %d14-31 / %d127

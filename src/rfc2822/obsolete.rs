@@ -1,4 +1,5 @@
 use chomp::*;
+use chrono::offset::fixed::FixedOffset;
 
 use util::*;
 use rfc2822::*;
@@ -138,4 +139,63 @@ pub fn obs_hour(i: Input<u8>) -> U8Result<usize> {
 
         ret n
     }
+}
+
+// obs-minute = [CFWS] 2DIGIT [CFWS]
+pub fn obs_minute(i: Input<u8>) -> U8Result<usize> {
+    parse!{i;
+        option(cfws, ());
+        let n = parse_digits(2);
+        option(cfws, ());
+
+        ret n
+    }
+}
+
+// obs-second = [CFWS] 2DIGIT [CFWS]
+pub fn obs_second(i: Input<u8>) -> U8Result<usize> {
+    parse!{i;
+        option(cfws, ());
+        let n = parse_digits(2);
+        option(cfws, ());
+
+        ret n
+    }
+}
+
+// obs-zone        =       "UT" / "GMT" /          ; Universal Time
+//                                                 ; North American UT
+//                                                 ; offsets
+//                         "EST" / "EDT" /         ; Eastern:  - 5/ - 4
+//                         "CST" / "CDT" /         ; Central:  - 6/ - 5
+//                         "MST" / "MDT" /         ; Mountain: - 7/ - 6
+//                         "PST" / "PDT" /         ; Pacific:  - 8/ - 7
+//
+//                         %d65-73 /               ; Military zones - "A"
+//                         %d75-90 /               ; through "I" and "K"
+//                         %d97-105 /              ; through "Z", both
+//                         %d107-122               ; upper and lower case
+// 
+// "Other multi-character (usually between 3 and 5) alphabetic time zones
+// have been used in Internet messages.  Any such time zone whose
+// meaning is not known SHOULD be considered equivalent to "-0000"
+// unless there is out-of-band information confirming their meaning."
+//
+pub fn obs_zone(i: Input<u8>) -> U8Result<FixedOffset> {
+    or(i, |i| string(i, b"UT").then(|i| i.ret(0)),
+    |i| or(i, |i| string(i, b"GMT").then(|i| i.ret(0)),
+    |i| or(i, |i| string(i, b"EST").then(|i| i.ret(-5)),
+    |i| or(i, |i| string(i, b"EDT").then(|i| i.ret(-4)),
+    |i| or(i, |i| string(i, b"CST").then(|i| i.ret(-6)),
+    |i| or(i, |i| string(i, b"CDT").then(|i| i.ret(-5)),
+    |i| or(i, |i| string(i, b"MST").then(|i| i.ret(-7)),
+    |i| or(i, |i| string(i, b"MDT").then(|i| i.ret(-6)),
+    |i| or(i, |i| string(i, b"PST").then(|i| i.ret(-8)),
+    |i| or(i, |i| string(i, b"PDT").then(|i| i.ret(-7)),
+    |i| or(i, |i| satisfy(i, |i| 65 <= i && i <= 73).then(|i| i.ret(0)),
+    |i| or(i, |i| satisfy(i, |i| 75 <= i && i <= 90).then(|i| i.ret(0)),
+    |i| or(i, |i| satisfy(i, |i| 97 <= i && i <= 105).then(|i| i.ret(0)),
+    |i| or(i, |i| satisfy(i, |i| 107 <= i && i <= 122).then(|i| i.ret(0)),
+    |i| skip_many1(i, alpha).then(|i| i.ret(0)),
+    )))))))))))))).map(|o| FixedOffset::west(o))
 }
