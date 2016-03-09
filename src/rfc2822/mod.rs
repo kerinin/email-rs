@@ -30,7 +30,7 @@ pub enum Address {
 }
 
 pub enum Field {
-    OrigDate(DateTime<FixedOffset>),
+    Date(DateTime<FixedOffset>),
     From(Vec<Address>),
     Sender(Address),
     ReplyTo(Vec<Address>),
@@ -43,4 +43,11 @@ pub enum Field {
     Subject(Vec<u8>),
     Comments(Vec<u8>),
     Keywords(Vec<Vec<u8>>),
+    ResentDate(DateTime<FixedOffset>),
+    ResentFrom(Vec<Address>),
+    ResentSender(Address),
+    ResentTo(Vec<Address>),
+    ResentCc(Vec<Address>),
+    ResentBcc(Vec<Address>),
+    ResentMessageID(Vec<u8>),
 }

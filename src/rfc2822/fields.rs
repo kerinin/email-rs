@@ -17,7 +17,7 @@ pub fn orig_date(i: Input<u8>) -> U8Result<Field> {
         let d = date_time();
         crlf();
 
-        ret Field::OrigDate(d)
+        ret Field::Date(d)
     }
 }
 
@@ -226,18 +226,81 @@ pub fn keywords(i: Input<u8>) -> U8Result<Field> {
 }
 
 // resent-date     =       "Resent-Date:" date-time CRLF
+pub fn resent_date(i: Input<u8>) -> U8Result<Field> {
+    parse!{i;
+        string(b"Resent-Date:");
+        let d = date_time();
+        crlf();
+
+        ret Field::ResentDate(d)
+    }
+}
 
 // resent-from     =       "Resent-From:" mailbox-list CRLF
+pub fn resent_from(i: Input<u8>) -> U8Result<Field> {
+    parse!{i;
+        string(b"Resent-From:");
+        let l = mailbox_list();
+        crlf();
+
+        ret Field::ResentFrom(l)
+    }
+}
 
 // resent-sender   =       "Resent-Sender:" mailbox CRLF
+pub fn resent_sender(i: Input<u8>) -> U8Result<Field> {
+    parse!{i;
+        string(b"Resent-Sender:");
+        let l = mailbox();
+        crlf();
+
+        ret Field::ResentSender(l)
+    }
+}
 
 // resent-to       =       "Resent-To:" address-list CRLF
+pub fn resent_to(i: Input<u8>) -> U8Result<Field> {
+    parse!{i;
+        string(b"Resent-To:");
+        let l = address_list();
+        crlf();
+
+        ret Field::ResentTo(l)
+    }
+}
 
 // resent-cc       =       "Resent-Cc:" address-list CRLF
+pub fn resent_cc(i: Input<u8>) -> U8Result<Field> {
+    parse!{i;
+        string(b"Resent-Cc:");
+        let l = address_list();
+        crlf();
+
+        ret Field::ResentCc(l)
+    }
+}
 
 // resent-bcc      =       "Resent-Bcc:" (address-list / [CFWS]) CRLF
+pub fn resent_bcc(i: Input<u8>) -> U8Result<Field> {
+    parse!{i;
+        string(b"Resent-Bcc:");
+        let l = address_list();
+        crlf();
+
+        ret Field::ResentBcc(l)
+    }
+}
 
 // resent-msg-id   =       "Resent-Message-ID:" msg-id CRLF
+pub fn resent_msg_id(i: Input<u8>) -> U8Result<Field> {
+    parse!{i;
+        string(b"Resent-Message-ID:");
+        let id = msg_id();
+        crlf();
+
+        ret Field::ResentMessageID(id)
+    }
+}
 
 // trace           =       [return]
 //                         1*received
