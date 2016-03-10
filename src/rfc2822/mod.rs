@@ -29,6 +29,14 @@ pub enum Address {
     },
 }
 
+pub enum ReceivedValue {
+    Addresses(Vec<Address>),
+    Address(Address),
+    Domain(Vec<u8>),
+    MessageID(Vec<u8>),
+    Text(Vec<u8>),
+}
+
 pub enum Field {
     Date(DateTime<FixedOffset>),
     From(Vec<Address>),
@@ -50,4 +58,6 @@ pub enum Field {
     ResentCc(Vec<Address>),
     ResentBcc(Vec<Address>),
     ResentMessageID(Vec<u8>),
+    ReturnPath(Address),
+    Received(Vec<(Vec<u8>, ReceivedValue)>, DateTime<FixedOffset>),
 }

@@ -285,3 +285,10 @@ pub fn obs_id_left(i: Input<u8>) -> U8Result<Vec<u8>> {
 pub fn obs_id_right(i: Input<u8>) -> U8Result<Vec<u8>> {
     domain(i)
 }
+
+// NOTE: I'm omitting all this noise
+//
+// obs-domain-list =       "@" domain *(*(CFWS / "," ) [CFWS] "@" domain)
+// obs-route       =       [CFWS] obs-domain-list ":" [CFWS]
+// obs-angle-addr  =       [CFWS] "<" [obs-route] addr-spec ">" [CFWS]
+// obs-path        =       obs-angle-addr

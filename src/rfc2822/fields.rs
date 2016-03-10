@@ -1,3 +1,5 @@
+use std::iter::FromIterator;
+
 use chomp::*;
 
 use rfc2822::*;
@@ -302,32 +304,128 @@ pub fn resent_msg_id(i: Input<u8>) -> U8Result<Field> {
     }
 }
 
-// trace           =       [return]
-//                         1*received
-
-// return          =       "Return-Path:" path CRLF
-
 // path            =       ([CFWS] "<" ([CFWS] / addr-spec) ">" [CFWS]) /
 //                         obs-path
+// NOTE: this allows "<>" as a valid match which is sort of useless, and the
+// obs-path definition is janky, so I'm going to modify the pattern to be:
+//
+// real-path       =       [CFWS] "<" [CFWS] addr-spec ">" [CFWS]
+pub fn path(i: Input<u8>) -> U8Result<Address> {
+    parse!{i; 
+        option(cfws, ());
+        token(b'<');
+        option(cfws, ());
+        let a = addr_spec();
+        token(b'>');
+        option(cfws, ());
 
-// received        =       "Received:" name-val-list ";" date-time CRLF
+        ret a
+    }
+}
 
-// name-val-list   =       [CFWS] [name-val-pair *(CFWS name-val-pair)]
+// return-path     =       "Return-Path:" path CRLF
+pub fn return_path(i: Input<u8>) -> U8Result<Field> {
+    parse!{i;
+        string(b"Return-Path:");
+        let p = path();
+        crlf();
 
-// name-val-pair   =       item-name CFWS item-value
+        ret Field::ReturnPath(p)
+    }
+}
 
 // item-name       =       ALPHA *(["-"] (ALPHA / DIGIT))
+pub fn item_name(i: Input<u8>) -> U8Result<&[u8]> {
+    matched_by(i, |i| parse!{i;
+        alpha();
+        skip_many(|i| parse!{i;
+            option(|i| token(i, b'-'), b'_');
+            or(alpha, digit);
+        });
+    }).map(|(v, _)| v)
+}
 
 // item-value      =       1*angle-addr / addr-spec /
 //                          atom / domain / msg-id
+pub fn item_value(i: Input<u8>) -> U8Result<ReceivedValue> {
+    or(i, 
+       |i| many1(i, angle_addr).map(|a| ReceivedValue::Addresses(a)),
+       |i| or(i, |i| addr_spec(i).map(|a| ReceivedValue::Address(a)),
+       |i| or(i, |i| atom(i).map(|v| ReceivedValue::Text(FromIterator::from_iter(v.iter().map(|i| i.clone())))),
+       |i| or(i, |i| domain(i).map(|v| ReceivedValue::Domain(v)), 
+              |i| msg_id(i).map(|v| ReceivedValue::MessageID(v))))))
+}
 
-// optional-field  =       field-name ":" unstructured CRLF
+// name-val-pair   =       item-name CFWS item-value
+pub fn name_val_pair(i: Input<u8>) -> U8Result<(&[u8], ReceivedValue)> {
+    parse!{i;
+        let n = item_name();
+        cfws();
+        let v = item_value();
 
-// field-name      =       1*ftext
+        ret (n, v)
+    }
+}
+// name-val-list   =       [CFWS] [name-val-pair *(CFWS name-val-pair)]
+pub fn name_val_list(i: Input<u8>) -> U8Result<Vec<(&[u8], ReceivedValue)>> {
+    parse!{i;
+        cfws();
+        sep_by(name_val_pair, cfws)
+    }
+}
+
+// received        =       "Received:" name-val-list ";" date-time CRLF
+pub fn received(i: Input<u8>) -> U8Result<Field> {
+    parse!{i;
+        string(b"Received:");
+        let nvs = name_val_list();
+        token(b';');
+        let dt = date_time();
+        crlf();
+
+        ret {
+            let name_values = nvs.into_iter().map(|(n, v)| {
+                let name = FromIterator::from_iter(n.iter().map(|i| i.clone()));
+                (name, v)
+            }).collect();
+
+            Field::Received(name_values, dt)
+        }
+    }
+}
+
+// trace           =       [return-path] 1*received
+pub fn trace(i: Input<u8>) -> U8Result<(Option<Field>, Vec<Field>)> {
+    parse!{i;
+        let rp: Option<Field> = option(|i| return_path(i).map(|r| Some(r)), None);
+        let rs = many1(received);
+
+        ret (rp, rs)
+    }
+}
 
 // ftext           =       %d33-57 /               ; Any character except
 //                         %d59-126                ;  controls, SP, and
 //                                                 ;  ":".
+pub fn ftext(i: Input<u8>) -> U8Result<u8> {
+    satisfy(i, |i| (33 <= i && i <= 57) || (59 <= i && i <= 126))
+}
+
+// field-name      =       1*ftext
+pub fn field_name(i: Input<u8>) -> U8Result<Vec<u8>> {
+    many1(i, ftext)
+}
+
+// optional-field  =       field-name ":" unstructured CRLF
+pub fn optional_field(i: Input<u8>) -> U8Result<(Vec<u8>, Vec<u8>)> {
+    parse!{i;
+        let n = field_name();
+        let v = unstructured();
+        crlf();
+
+        ret (n, v)
+    }
+}
 
 // fields          =       *(trace
 //                           *(resent-date /
