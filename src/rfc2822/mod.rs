@@ -17,7 +17,7 @@ pub enum Day { Mon, Tue, Wed, Thu, Fri, Sat, Sun }
 
 pub enum Month { Jan, Feb, Mar, Apr, May, Jun, Jul, Aug, Sep, Oct, Nov, Dec }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Debug)]
 pub enum Address {
     Mailbox {
         local_part: String,
@@ -30,6 +30,7 @@ pub enum Address {
     },
 }
 
+#[derive(Debug)]
 pub enum ReceivedValue {
     Addresses(Vec<Address>),
     Address(Address),
@@ -38,6 +39,7 @@ pub enum ReceivedValue {
     Text(Vec<u8>),
 }
 
+#[derive(Debug)]
 pub enum Field {
     Date(DateTime<FixedOffset>),
     From(Vec<Address>),
@@ -64,6 +66,7 @@ pub enum Field {
     Optional(Vec<u8>, Vec<u8>),
 }
 
+#[derive(Debug)]
 pub struct Message {
     pub fields: Vec<Field>,
     pub body: Vec<u8>,
