@@ -34,6 +34,14 @@ pub fn from(i: Input<u8>) -> U8Result<Field> {
     }
 }
 
+#[test]
+#[ignore]
+fn test_from() {
+    let i = b"From: John Doe <jdoe@machine.example>";
+    let msg = parse_only(from, i);
+    assert!(msg.is_ok());
+}
+
 // sender          =       "Sender:" mailbox CRLF
 pub fn sender(i: Input<u8>) -> U8Result<Field> {
     parse!{i;

@@ -55,3 +55,37 @@ pub fn quoted_string(i: Input<u8>) -> U8Result<Vec<u8>> {
     }
 }
 
+pub fn quoted_string_not<P>(i: Input<u8>, p: P) -> U8Result<Vec<u8>> where
+P: Fn(u8) -> bool,
+{
+    parse!{i;
+        option(cfws, ());
+        dquote();
+        let c = many(|i| {
+            option(i, fws, ()).then(|i| {
+                peek_next(i).bind(|i, next| {
+                    if !p(next) {
+                        qcontent(i)
+                    } else {
+                        i.err(Error::Unexpected)
+                    }
+                })
+            })
+        });
+        option(fws, ());
+        dquote();
+
+        ret c
+    }
+}
+
+#[test]
+fn test_quoted_string_not() {
+    let i = b"jdoe";
+    let msg = parse_only(|i| quoted_string_not(i, |c| c == b'@'), i);
+    assert!(msg.is_ok());
+
+    let i = b"jdoe@example.com";
+    let msg = parse_only(|i| quoted_string_not(i, |c| c == b'@'), i);
+    assert!(msg.is_err());
+}

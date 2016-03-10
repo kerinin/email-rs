@@ -14,7 +14,16 @@ pub fn display_name(i: Input<u8>) -> U8Result<Vec<u8>> {
     phrase(i)
 }
 
+#[test]
+fn test_display_name() {
+    let i = b"John Doe";
+    let msg = parse_only(display_name, i);
+    assert!(msg.is_ok());
+}
+
 // local-part = dot-atom / quoted-string / obs-local-part
+// NOTE: `quoted-string` includes `@` (as does obs-local-part, since it includes
+// `quoted-string`)
 pub fn local_part(i: Input<u8>) -> U8Result<Vec<u8>> {
     or(i, 
        |i| dot_atom(i).bind(|i, v| i.ret(FromIterator::from_iter(v.iter().map(|i| i.clone())))),
@@ -24,6 +33,19 @@ pub fn local_part(i: Input<u8>) -> U8Result<Vec<u8>> {
               )
       )
 }
+
+#[test]
+#[ignore]
+fn test_local_part() {
+    let i = b"jdoe";
+    let msg = parse_only(local_part, i);
+    assert!(msg.is_ok());
+
+    let i = b"jdoe@example.com";
+    let msg = parse_only(local_part, i);
+    assert!(msg.is_err());
+}
+
 // dtext           =       NO-WS-CTL /     ; Non white space controls
 //
 //                         %d33-90 /       ; The rest of the US-ASCII
@@ -68,10 +90,18 @@ pub fn domain(i: Input<u8>) -> U8Result<Vec<u8>> {
               ))
 }
 
+#[test]
+fn test_domain() {
+    let i = b"machine.example";
+    let msg = parse_only(domain, i);
+    assert!(msg.is_ok());
+}
+
 // addr-spec = local-part "@" domain
 pub fn addr_spec(i: Input<u8>) -> U8Result<Address> {
     parse!{i;
         let l = local_part();
+        token(b'@');
         let d = domain();
 
         ret Address::Mailbox{
@@ -80,6 +110,13 @@ pub fn addr_spec(i: Input<u8>) -> U8Result<Address> {
             display_name: None,
         }
     }
+}
+
+#[test]
+fn test_addr_spec() {
+    let i = b"jdoe@machine.example";
+    let msg = parse_only(addr_spec, i);
+    assert!(msg.is_ok());
 }
 
 // angle-addr = [CFWS] "<" addr-spec ">" [CFWS] / obs-angle-addr
@@ -95,6 +132,14 @@ pub fn angle_addr(i: Input<u8>) -> U8Result<Address> {
 
         ret a
     }
+}
+
+#[test]
+#[ignore]
+fn test_angle_addr() {
+    let i = b"<jdoe@machine.example>";
+    let msg = parse_only(angle_addr, i);
+    assert!(msg.is_ok());
 }
 
 // name-addr = [display-name] angle-addr
@@ -119,6 +164,14 @@ pub fn name_addr(i: Input<u8>) -> U8Result<Address> {
             _ => i.err(Error::Unexpected),
         }
     })
+}
+
+#[test]
+#[ignore]
+fn test_name_addr() {
+    let i = b"John Doe <jdoe@machine.example>";
+    let msg = parse_only(name_addr, i);
+    assert!(msg.is_ok());
 }
 
 // mailbox = name-addr / addr-spec
@@ -147,6 +200,13 @@ pub fn mailbox_list(i: Input<u8>) -> U8Result<Vec<Address>> {
        },
        obs_mbox_list,
        )
+}
+#[test]
+#[ignore]
+fn test_mailbox_list() {
+    let i = b"John Doe <jdoe@machine.example>";
+    let msg = parse_only(mailbox_list, i);
+    assert!(msg.is_ok());
 }
 
 // group           =       display-name ":" [mailbox-list / CFWS] ";"
