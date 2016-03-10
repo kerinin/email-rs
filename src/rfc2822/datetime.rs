@@ -1,6 +1,4 @@
 use chomp::*;
-use chrono;
-use chrono::offset::TimeZone;
 use chrono::naive::time::NaiveTime;
 use chrono::naive::date::NaiveDate;
 use chrono::naive::datetime::NaiveDateTime;
@@ -11,7 +9,6 @@ use util::*;
 use rfc2822::*;
 use rfc2822::folding::*;
 use rfc2822::obsolete::*;
-use rfc2822::primitive::*;
 
 // day-name        =       "Mon" / "Tue" / "Wed" / "Thu" /
 //                         "Fri" / "Sat" / "Sun"
@@ -183,7 +180,7 @@ pub fn time(i: Input<u8>) -> U8Result<(NaiveTime, FixedOffset)> {
 pub fn date_time(i: Input<u8>) -> U8Result<DateTime<FixedOffset>> {
     parse!{i;
         option(|i| parse!{i;
-            let d = day_of_week();
+            day_of_week();
             token(b',');
 
             ret ()

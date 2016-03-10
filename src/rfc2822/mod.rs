@@ -2,15 +2,16 @@
 use chrono::datetime::DateTime;
 use chrono::offset::fixed::FixedOffset;
 
-mod address;
-mod atom;
-mod datetime;
-mod fields;
-mod folding;
-mod misc;
-mod obsolete;
-mod primitive;
-mod quoted;
+pub mod address;
+pub mod atom;
+pub mod datetime;
+pub mod fields;
+pub mod folding;
+pub mod message;
+pub mod misc;
+pub mod obsolete;
+pub mod primitive;
+pub mod quoted;
 
 pub enum Day { Mon, Tue, Wed, Thu, Fri, Sat, Sun }
 
@@ -60,4 +61,10 @@ pub enum Field {
     ResentMessageID(Vec<u8>),
     ReturnPath(Address),
     Received(Vec<(Vec<u8>, ReceivedValue)>, DateTime<FixedOffset>),
+    Optional(Vec<u8>, Vec<u8>),
+}
+
+pub struct Message {
+    pub fields: Vec<Field>,
+    pub body: Vec<u8>,
 }

@@ -417,13 +417,13 @@ pub fn field_name(i: Input<u8>) -> U8Result<Vec<u8>> {
 }
 
 // optional-field  =       field-name ":" unstructured CRLF
-pub fn optional_field(i: Input<u8>) -> U8Result<(Vec<u8>, Vec<u8>)> {
+pub fn optional_field(i: Input<u8>) -> U8Result<Field> {
     parse!{i;
         let n = field_name();
         let v = unstructured();
         crlf();
 
-        ret (n, v)
+        ret Field::Optional(n, v)
     }
 }
 
@@ -449,6 +449,7 @@ pub fn optional_field(i: Input<u8>) -> U8Result<(Vec<u8>, Vec<u8>)> {
 //                         comments /
 //                         keywords /
 //                         optional-field)
+//
 //
 // Field           Min number      Max number      Notes
 // ---------------+---------------+---------------+-----
@@ -488,3 +489,31 @@ pub fn optional_field(i: Input<u8>) -> U8Result<(Vec<u8>, Vec<u8>)> {
 // comments        0               unlimited
 // keywords        0               unlimited
 // optional-field  0               unlimited
+//
+// NOTE: This omits some of the structure around trace
+pub fn fields(i: Input<u8>) -> U8Result<Vec<Field>> {
+    many(i, |i| parse!{i;
+        // trace() <|>
+        resent_date() <|>
+            resent_from() <|>
+            resent_sender() <|>
+            resent_to() <|>
+            resent_cc() <|>
+            resent_bcc() <|>
+            resent_msg_id() <|>
+            orig_date() <|>
+            from() <|>
+            sender() <|>
+            reply_to() <|>
+            to() <|>
+            cc() <|>
+            bcc() <|>
+            message_id() <|>
+            in_reply_to() <|>
+            references() <|>
+            subject() <|>
+            comments() <|>
+            keywords() <|>
+            optional_field()
+    })
+}

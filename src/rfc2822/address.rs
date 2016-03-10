@@ -1,7 +1,6 @@
 use std::iter::FromIterator;
 
 use chomp::*;
-use util::*;
 use rfc2822::*;
 use rfc2822::atom::*;
 use rfc2822::folding::*;
@@ -107,7 +106,7 @@ pub fn name_addr(i: Input<u8>) -> U8Result<Address> {
         ret (n, a)
     };
 
-    r.bind(|i, (r, mut a)| {
+    r.bind(|i, (r, a)| {
         match a {
             Address::Mailbox{local_part: l, domain: d, display_name: _} => i.ret(Address::Mailbox{
                 local_part: l,
