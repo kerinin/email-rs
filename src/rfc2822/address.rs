@@ -258,21 +258,40 @@ fn test_mailbox_list() {
 // group           =       display-name ":" [mailbox-list / CFWS] ";"
 //                         [CFWS]
 pub fn group(i: Input<u8>) -> U8Result<Address> {
-    parse!{i;
-        let n = display_name();
-        token(b':');
-        let ms = option(|i| or(i,
-                               mailbox_list, 
-                               |i| cfws(i).then(|i| i.ret(vec!())),
-                               ), vec!());
-        token(b';');
+    println!("group({:?})", i);
+    display_name(i).bind(|i, n| {
+        println!("group.display_name.bind({:?})", n);
+        token(i, b':').then(|i| {
+            println!("group.token(:)");
+            let list_or_none = |i| {
+                or(i, mailbox_list, |i| cfws(i).map(|_| vec!()))
+            };
 
-        ret Address::Group{
-            // NOTE: Encoding?
-            display_name: String::from_utf8(n).unwrap(),
-            mailboxes: ms,
-        }
-    }
+            option(i, list_or_none, vec!()).bind(|i, ms| {
+                println!("group.option(list_or_none).bind({:?})", ms);
+                token(i, b';').then(|i| {
+                    println!("group.token(;)");
+                    option(i, cfws, ()).then(|i| {
+                        println!("group.option(cfws)");
+                        let g = Address::Group{
+                            // NOTE: Encoding?
+                            display_name: String::from_utf8(n).unwrap(),
+                            mailboxes: ms,
+                        };
+
+                        i.ret(g)
+                    })
+                })
+            })
+        })
+    })
+}
+
+#[test]
+fn test_group() {
+    let i = b"A Group(Some people)\r\n     :Chris Jones <c@(Chris's host.)public.example>,\r\n         joe@example.org,\r\n  John <jdoe@one.test> (my dear friend); (the end of the group)";
+    let msg = parse_only(group, i);
+    assert!(msg.is_ok());
 }
 
 
@@ -298,6 +317,10 @@ pub fn address_list(i: Input<u8>) -> U8Result<Vec<Address>> {
 
 #[test]
 fn test_address_list() {
+    let i = b"A Group(Some people)\r\n     :Chris Jones <c@(Chris's host.)public.example>,\r\n         joe@example.org,\r\n  John <jdoe@one.test> (my dear friend); (the end of the group)";
+    let msg = parse_only(address_list, i);
+    assert!(msg.is_ok());
+
     let i = b"<boss@nil.test>, \"Giant; \\\"Big\\\" Box\" <sysservices@example.net>";
     let msg = parse_only(address_list, i);
     assert!(msg.is_ok());

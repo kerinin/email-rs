@@ -66,8 +66,6 @@ pub fn ccontent(i: Input<u8>) -> U8Result<()> {
 // NOTE: Because this is a greedy match, this uses the following:
 // CFWS = *([FWS] comment) [FWS]
 pub fn cfws(i: Input<u8>) -> U8Result<()> {
-    println!("cfws({:?})", i);
-
     let fws_comment = |i| {
         option(i, fws, ()).then(|i| {
             comment(i)

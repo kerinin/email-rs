@@ -30,6 +30,10 @@ pub fn orig_date(i: Input<u8>) -> U8Result<Field> {
 
 #[test]
 fn test_orig_date() {
+    let i = b"Date: Thu,\r\n      13\r\n        Feb\r\n          1969\r\n 23:32\r\n               -0330 (Newfoundland Time)\r\n";
+    let msg = parse_only(orig_date, i);
+    assert!(msg.is_ok());
+
     let i = b"Date: Fri, 21 Nov 1997 09:55:06 -0600\r\n";
     let msg = parse_only(orig_date, i);
     assert!(msg.is_ok());
@@ -104,6 +108,10 @@ pub fn to(i: Input<u8>) -> U8Result<Field> {
 
 #[test]
 fn test_to() {
+    let i = b"To:A Group(Some people)\r\n     :Chris Jones <c@(Chris's host.)public.example>,\r\n         joe@example.org,\r\n  John <jdoe@one.test> (my dear friend); (the end of the group)\r\n";
+    let msg = parse_only(to, i);
+    assert!(msg.is_ok());
+
     let i = b"To: Mary Smith <mary@example.net>\r\n";
     let msg = parse_only(to, i);
     assert!(msg.is_ok());
@@ -124,6 +132,13 @@ pub fn cc(i: Input<u8>) -> U8Result<Field> {
             })
         })
     })
+}
+
+#[test]
+fn test_cc() {
+    let i = b"Cc:(Empty list)(start)Undisclosed recipients  :(nobody(that I know))  ;\r\n";
+    let msg = parse_only(cc, i);
+    assert!(msg.is_ok());
 }
 
 // bcc             =       "Bcc:" (address-list / [CFWS]) CRLF
