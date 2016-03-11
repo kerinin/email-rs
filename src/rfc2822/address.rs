@@ -143,25 +143,26 @@ fn test_angle_addr() {
 
 // name-addr = [display-name] angle-addr
 pub fn name_addr(i: Input<u8>) -> U8Result<Address> {
-    let r = parse!{i;
-        let n = display_name();
-        let a = angle_addr();
-
-        ret (n, a)
-    };
-
-    r.bind(|i, (r, a)| {
-        match a {
-            Address::Mailbox{local_part: l, domain: d, display_name: _} => i.ret(Address::Mailbox{
-                local_part: l,
-                domain: d,
-                // NOTE: Encoding?
-                display_name: Some(String::from_utf8(r).unwrap()),
-            }),
-            // NOTE: This _would_ be unexpected, as `display_name` should always
-            // return an Address::Mailbox
-            _ => i.err(Error::Unexpected),
-        }
+    println!("name_addr({:?})", i);
+    option(i, |i| display_name(i).map(|v| Some(v)), None).bind(|i, n| {
+        println!("name_addr.display_name.bind({:?}, {:?})", i, n);
+        angle_addr(i).bind(|i, a| {
+            println!("name_addr.angle_addr.bind({:?}, {:?})", i, a);
+            match a {
+                Address::Mailbox{local_part: l, domain: d, display_name: _} => {
+                    let mb = Address::Mailbox{
+                        local_part: l,
+                        domain: d,
+                        display_name: n,
+                    };
+                    println!("-> name_addr({:?})", mb);
+                    i.ret(mb)
+                },
+                // NOTE: This _would_ be unexpected, as `display_name` should always
+                // return an Address::Mailbox
+                _ => i.err(Error::Unexpected),
+            }
+        })
     })
 }
 
@@ -170,11 +171,19 @@ fn test_name_addr() {
     let i = b"John Doe <jdoe@machine.example>";
     let msg = parse_only(name_addr, i);
     assert!(msg.is_ok());
+
+    let i = b"<boss@nil.test>";
+    let msg = parse_only(name_addr, i);
+    assert!(msg.is_ok());
 }
 
 // mailbox = name-addr / addr-spec
 pub fn mailbox(i: Input<u8>) -> U8Result<Address> {
-    or(i, name_addr, addr_spec)
+    println!("mailbox({:?})", i);
+    or(i, name_addr, addr_spec).bind(|i, v| {
+        println!("-> mailbox({:?})", v);
+        i.ret(v)
+    })
 }
 
 // mailbox-list = (mailbox *("," mailbox)) / obs-mbox-list
@@ -199,6 +208,7 @@ pub fn mailbox_list(i: Input<u8>) -> U8Result<Vec<Address>> {
        obs_mbox_list,
        )
 }
+
 #[test]
 fn test_mailbox_list() {
     let i = b"John Doe <jdoe@machine.example>";
@@ -229,10 +239,27 @@ pub fn group(i: Input<u8>) -> U8Result<Address> {
 
 // address = mailbox / group
 pub fn address(i: Input<u8>) -> U8Result<Address> {
-    or(i, mailbox, group)
+    println!("address({:?})", i);
+    or(i, mailbox, group).bind(|i, v| {
+        println!("-> address({:?})", v);
+        i.ret(v)
+    })
 }
 
 // address-list    =       (address *("," address)) / obs-addr-list
 pub fn address_list(i: Input<u8>) -> U8Result<Vec<Address>> {
-    or(i, |i| sep_by1(i, address, |i| token(i, b',')), obs_addr_list)
+    println!("address_list({:?})", i);
+    let a = |i| sep_by1(i, address, |i| token(i, b','));
+
+    or(i, a, obs_addr_list).bind(|i, v| {
+        println!("-> address_list({:?})", v);
+        i.ret(v)
+    })
+}
+
+#[test]
+fn test_address_list() {
+    let i = b"<boss@nil.test>, \"Giant; \\\"Big\\\" Box\" <sysservices@example.net>";
+    let msg = parse_only(address_list, i);
+    assert!(msg.is_ok());
 }

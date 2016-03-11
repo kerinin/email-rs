@@ -24,7 +24,7 @@ pub enum Address {
     Mailbox {
         local_part: String,
         domain: String,
-        display_name: Option<String>,
+        display_name: Option<Vec<u8>>,
     },
     Group {
         display_name: String,

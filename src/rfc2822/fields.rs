@@ -45,6 +45,7 @@ pub fn from(i: Input<u8>) -> U8Result<Field> {
             println!("from.mailbox_list.bind({:?}, {:?})", i, l);
             crlf(i).then(|i| {
                 println!("from.crlf.then({:?})", i);
+                println!("-> from({:?})", l);
                 i.ret(Field::From(l))
             })
         })
@@ -89,6 +90,7 @@ pub fn to(i: Input<u8>) -> U8Result<Field> {
             println!("to.address_list.bind({:?}, {:?})", i, l);
             crlf(i).then(|i| {
                 println!("to.crlf.then({:?})", i);
+                println!("-> to({:?})", l);
 
                 i.ret(Field::To(l))
             })
@@ -105,13 +107,19 @@ fn test_to() {
 
 // cc              =       "Cc:" address-list CRLF
 pub fn cc(i: Input<u8>) -> U8Result<Field> {
-    parse!{i;
-        string(b"Cc:");
-        let l = address_list();
-        crlf();
+    println!("cc({:?})", i);
+    string(i, b"Cc:").then(|i| {
+        println!("cc.string(Cc:).then({:?})", i);
+        address_list(i).bind(|i, l| {
+            println!("cc.address_list.bind({:?}, {:?})", i, l);
+            crlf(i).then(|i| {
+                println!("cc.crlf.then({:?})", i);
+                println!("-> cc({:?})", l);
 
-        ret Field::Cc(l)
-    }
+                i.ret(Field::Cc(l))
+            })
+        })
+    })
 }
 
 // bcc             =       "Bcc:" (address-list / [CFWS]) CRLF
@@ -246,6 +254,7 @@ pub fn subject(i: Input<u8>) -> U8Result<Field> {
             println!("subject.unstructured.bind({:?}, {:?})", i, u);
             crlf(i).then(|i| {
                 println!("subject.crlf.then({:?})", i);
+                println!("-> subject({:?})", u);
 
                 i.ret(Field::Subject(u))
             })
@@ -481,6 +490,7 @@ pub fn optional_field(i: Input<u8>) -> U8Result<Field> {
             println!("optional_field.unstructured.bind({:?}, {:?})", i, v);
             crlf(i).then(|i| {
                 println!("optional_field.crlf.then({:?})", i);
+                println!("-> optional({:?}, {:?})", n, v);
 
                 i.ret(Field::Optional(n, v))
             })
