@@ -411,59 +411,95 @@ pub fn item_name(i: Input<u8>) -> U8Result<&[u8]> {
 
 // item-value      =       1*angle-addr / addr-spec /
 //                          atom / domain / msg-id
+// NOTE: I'm switching the order such that atom is the last matcher becasue it
+// prematurely matches for some domains
 pub fn item_value(i: Input<u8>) -> U8Result<ReceivedValue> {
     or(i, 
        |i| many1(i, angle_addr).map(|a| ReceivedValue::Addresses(a)),
        |i| or(i, |i| addr_spec(i).map(|a| ReceivedValue::Address(a)),
-       |i| or(i, |i| atom(i).map(|v| ReceivedValue::Text(FromIterator::from_iter(v.iter().map(|i| i.clone())))),
        |i| or(i, |i| domain(i).map(|v| ReceivedValue::Domain(v)), 
+       |i| or(i, |i| atom(i).map(|v| ReceivedValue::Text(FromIterator::from_iter(v.iter().map(|i| i.clone())))),
               |i| msg_id(i).map(|v| ReceivedValue::MessageID(v))))))
 }
 
 // name-val-pair   =       item-name CFWS item-value
 pub fn name_val_pair(i: Input<u8>) -> U8Result<(&[u8], ReceivedValue)> {
-    parse!{i;
-        let n = item_name();
-        cfws();
-        let v = item_value();
+    println!("name_val_pair({:?})", i);
+    item_name(i).bind(|i, n| {
+        println!("name_val_pair.item_name.bind({:?})", n);
+        cfws(i).then(|i| {
+            println!("name_val_pair.cfws");
+            item_value(i).bind(|i, v| {
+                println!("name_val_pair.item_value.bind({:?})", v);
 
-        ret (n, v)
-    }
+                i.ret((n, v))
+            })
+        })
+    })
 }
 // name-val-list   =       [CFWS] [name-val-pair *(CFWS name-val-pair)]
 pub fn name_val_list(i: Input<u8>) -> U8Result<Vec<(&[u8], ReceivedValue)>> {
-    parse!{i;
-        cfws();
-        sep_by(name_val_pair, cfws)
-    }
+    println!("name_val_list({:?})", i);
+    cfws(i).then(|i| {
+        println!("name_val_list.cfws.then");
+        sep_by(i, name_val_pair, cfws).bind(|i, list| {
+            println!("name_val_list.sep_by.bind({:?})", list);
+
+            i.ret(list)
+        })
+    })
 }
 
 // received        =       "Received:" name-val-list ";" date-time CRLF
 pub fn received(i: Input<u8>) -> U8Result<Received> {
-    parse!{i;
-        string(b"Received:");
-        let nvs = name_val_list();
-        token(b';');
-        let dt = date_time();
-        crlf();
+    println!("received({:?})", i);
+    string(i, b"Received:").then(|i| {
+        println!("received.string(Received:).then");
+        name_val_list(i).bind(|i, nvs| {
+            println!("received.name_val_list.bind({:?})", nvs);
+            token(i, b';').then(|i| {
+                println!("received.token.then");
+                date_time(i).bind(|i, dt| {
+                    println!("received.date_time.bind({:?})", dt);
+                    crlf(i).then(|i| {
+                        println!("received.crlf.then");
+                        let name_values = nvs.into_iter().map(|(n, v)| {
+                            let name = FromIterator::from_iter(n.iter().map(|i| i.clone()));
+                            (name, v)
+                        }).collect();
+                        let r = Received{date_time: dt, data: name_values};
+                        println!("-> received({:?})", r);
 
-        ret {
-            let name_values = nvs.into_iter().map(|(n, v)| {
-                let name = FromIterator::from_iter(n.iter().map(|i| i.clone()));
-                (name, v)
-            }).collect();
+                        i.ret(r)
+                    })
+                })
+            })
+        })
+    })
+}
 
-            Received{date_time: dt, data: name_values}
-        }
-    }
+#[test]
+fn test_received() {
+    let i = b"Received: from machine.example by x.y.test; 21 Nov 1997 10:01:22 -0600";
+    let msg = parse_only(received, i);
+    assert!(msg.is_ok());
+
+    let i = b"Received: from x.y.test\r\n   by example.net\r\n   via TCP\r\n   with ESMTP\r\n   id ABC12345\r\n   for <mary@example.net>;  21 Nov 1997 10:05:43 -0600";
+    let msg = parse_only(received, i);
+    assert!(msg.is_ok());
 }
 
 // trace           =       [return-path] 1*received
 pub fn trace(i: Input<u8>) -> U8Result<(Option<Address>, Vec<Received>)> {
+    println!("trace({:?})", i);
     option(i, |i| {
         return_path(i).map(|r| Some(r))
     }, None).bind(|i, rp| {
+        println!("trace.option(return_path).bind({:?}, {:?})", i, rp);
         many1(i, received).bind(|i, rs| {
+            println!("trace.many1(received).bind({:?}, {:?})", i, rs);
+            println!("-> trace({:?}, {:?})", rp, rs);
+
             i.ret((rp, rs))
         })
     })

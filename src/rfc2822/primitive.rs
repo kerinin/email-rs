@@ -25,7 +25,7 @@ pub fn wsp(i: Input<u8>) -> U8Result<u8> {
 }
 
 pub fn digit(i: Input<u8>) -> U8Result<u8> {
-    satisfy(i, |i| 30 <= i && i <= 39)
+    satisfy(i, |i| 48 <= i && i <= 57)
 }
 
 pub fn alpha(i: Input<u8>) -> U8Result<u8> {

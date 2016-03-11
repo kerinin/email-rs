@@ -41,7 +41,6 @@ fn example_1_2() {
 }
 
 #[test]
-#[ignore]
 fn example_1_3() {
     let raw = include_bytes!("example_1_3.eml");
     let msg = parse_only(message, raw);
@@ -101,6 +100,7 @@ fn example_3_1() {
     }
 }
 
+// Requires obsolete header fields
 #[test]
 #[ignore]
 fn example_3_2() {
@@ -115,7 +115,6 @@ fn example_3_2() {
 }
 
 #[test]
-#[ignore]
 fn example_4() {
     let raw = include_bytes!("example_4.eml");
     let msg = parse_only(message, raw);
