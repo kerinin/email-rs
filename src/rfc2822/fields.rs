@@ -57,6 +57,10 @@ fn test_from() {
     let i = b"From: John Doe <jdoe@machine.example>\r\n";
     let msg = parse_only(from, i);
     assert!(msg.is_ok());
+
+    let i = b"From: Pete(A wonderful \\) chap) <pete(his account)@silly.test(his host)>\r\n";
+    let msg = parse_only(from, i);
+    assert!(msg.is_ok());
 }
 
 // sender          =       "Sender:" mailbox CRLF

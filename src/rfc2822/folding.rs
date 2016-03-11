@@ -63,19 +63,25 @@ pub fn ccontent(i: Input<u8>) -> U8Result<()> {
 }
 
 // CFWS = *([FWS] comment) (([FWS] comment) / FWS)
+// NOTE: Because this is a greedy match, this uses the following:
+// CFWS = *([FWS] comment) [FWS]
 pub fn cfws(i: Input<u8>) -> U8Result<()> {
-    parse!{i;
-        skip_many(|i| { parse!{i;
-            option(fws, ());
-            comment();
-        }});
+    println!("cfws({:?})", i);
 
-        or(
-            |i| { parse!{i;
-                option(fws, ());
-                comment();
-            }},
-            fws,
-            )
-    }
+    let fws_comment = |i| {
+        option(i, fws, ()).then(|i| {
+            comment(i)
+        })
+    };
+
+    skip_many(i, fws_comment).then(|i| {
+        option(i, fws, ())
+    })
+}
+
+#[test]
+fn test_cfws() {
+    let i = b"(his account)";
+    let msg = parse_only(cfws, i);
+    assert!(msg.is_ok());
 }

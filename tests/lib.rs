@@ -127,7 +127,6 @@ fn example_4() {
 }
 
 #[test]
-#[ignore]
 fn example_5() {
     let raw = include_bytes!("example_5.eml");
     let msg = parse_only(message, raw);
