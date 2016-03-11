@@ -25,7 +25,7 @@ pub fn atext(i: Input<u8>) -> U8Result<u8> {
             i == 45 ||                  // -
             i == 47 ||                  // /
             i == 63 ||                  // ?
-            (i <= 94 && i <= 96) ||     // ^,_,`
+            (94 <= i && i <= 96) ||     // ^,_,`
             (123 <= i && i <= 126)      // {,|,},~
 
     })
@@ -46,25 +46,26 @@ pub fn atom(i: Input<u8>) -> U8Result<&[u8]> {
 
 // dot-atom-text = 1*atext *("." 1*atext)
 pub fn dot_atom_text(i: Input<u8>) -> U8Result<&[u8]> {
-    matched_by(i, |i| { parse!{i;
-        skip_many1(atext);
-        skip_many(|i| { parse!{i;
-            token(b'.');
-            skip_many1(atext);
-        }});
-
-    }}).map(|(v, _)| v)
+    matched_by(i, |i| {
+        skip_many1(i, atext).then(|i| {
+            skip_many(i, |i| {
+                token(i, b'.').then(|i| {
+                    skip_many1(i, atext)
+                })
+            })
+        })
+    }).map(|(v, _)| v)
 }
 
 // dot-atom = [CFWS] dot-atom-text [CFWS]
 pub fn dot_atom(i: Input<u8>) -> U8Result<&[u8]> {
-    parse!{i;
-        option(cfws, ());
-        let a = matched_by(|i| {
+    option(i, cfws, ()).then(|i| {
+        matched_by(i, |i| {
             skip_many1(i, dot_atom_text)
-        });
-        option(cfws, ());
-
-        ret a.0
-    }
+        }).bind(|i, a| {
+            option(i, cfws, ()).then(|i| {
+                i.ret(a.0)
+            })
+        })
+    })
 }

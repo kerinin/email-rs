@@ -37,15 +37,16 @@ pub fn day_of_week(i: Input<u8>) -> U8Result<Day> {
 
 // day = ([FWS] 1*2DIGIT) / obs-day
 pub fn day(i: Input<u8>) -> U8Result<usize> {
-    parse!{i;
-        or(
-            |i| { parse!{i;
-                option(fws, ());
-                parse_digits((1..3))
-            }},
-            obs_day,
-            )
-    }
+    println!("day({:?})", i);
+    let a = |i| {
+        println!("day.a({:?})", i);
+        option(i, fws, ()).then(|i| {
+            println!("day.option(fws).then({:?})", i);
+            parse_digits(i, (1..3))
+        })
+    };
+
+    or(i, a, obs_day)
 }
 
 // month-name      =       "Jan" / "Feb" / "Mar" / "Apr" /
@@ -94,13 +95,18 @@ pub fn year(i: Input<u8>) -> U8Result<usize> {
 
 // date = day month year
 pub fn date(i: Input<u8>) -> U8Result<NaiveDate> {
-    parse!{i;
-        let d = day();
-        let m = month();
-        let y = year();
+    println!("date({:?})", i);
+    day(i).bind(|i, d| {
+        println!("date.day.bind({:?}, {:?})", i, d);
+        month(i).bind(|i, m| {
+            println!("date.month.bind({:?}, {:?})", i, m);
+            year(i).bind(|i, y| {
+                println!("date.year.bind({:?}, {:?})", i, y);
 
-        ret NaiveDate::from_ymd(y as i32, m as u32, d as u32)
-    }
+                i.ret(NaiveDate::from_ymd(y as i32, m as u32, d as u32))
+            })
+        })
+    })
 }
 
 // hour = 2DIGIT / obs-hour
@@ -178,17 +184,27 @@ pub fn time(i: Input<u8>) -> U8Result<(NaiveTime, FixedOffset)> {
 
 // date-time = [ day-of-week "," ] date FWS time [CFWS]
 pub fn date_time(i: Input<u8>) -> U8Result<DateTime<FixedOffset>> {
-    parse!{i;
-        option(|i| parse!{i;
-            day_of_week();
-            token(b',');
-
-            ret ()
-        }, ());
-        let d = date();
-        fws();
-        let t = time();
-
-        ret DateTime::from_utc(NaiveDateTime::new(d, t.0), t.1)
-    }
+    println!("date_time({:?})", i);
+    option(i, |i| {
+        println!("date_time.option({:?})", i);
+        day_of_week(i).then(|i| {
+            println!("date_time.day_of_week({:?})", i);
+            token(i, b',').then(|i| {
+                println!("date_time.token(b).then({:?})", i);
+                i.ret(())
+            })
+        })
+    }, ()).then(|i| {
+        println!("date_time.option.then({:?})", i);
+        date(i).bind(|i, d| {
+            println!("date_time.date.bind({:?}, {:?})", i, d);
+            fws(i).then(|i| {
+                println!("date_time.fws.then({:?})", i);
+                time(i).bind(|i, t| {
+                    println!("date_time.time.bind({:?}, {:?})", i, t);
+                    i.ret(DateTime::from_utc(NaiveDateTime::new(d, t.0), t.1))
+                })
+            })
+        })
+    })
 }

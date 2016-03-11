@@ -13,12 +13,17 @@ pub fn body(i: Input<u8>) -> U8Result<Vec<u8>> {
 //                         [CRLF body]
 // TODO: Implement obs-fields
 pub fn message(i: Input<u8>) -> U8Result<Message> {
-    parse!{i;
-        // let f = or(fields, obs_fields);
-        let f = fields();
-        crlf();
-        let b = body();
+    println!("message({:?})", i);
 
-        ret Message{fields: f, body: b}
-    }
+    // let f = or(fields, obs_fields);
+    fields(i).bind(|i, (traces, fields)| {
+        println!("message.fields.bind({:?}, ({:?}, {:?}))", i, traces, fields);
+        crlf(i).then(|i| {
+            println!("message.crlf.then({:?})", i);
+            body(i).bind(|i, body| {
+                println!("message.body.bind({:?}, {:?})", i, body);
+                i.ret(Message{traces: traces, fields: fields, body: body})
+            })
+        })
+    })
 }

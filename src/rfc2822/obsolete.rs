@@ -203,12 +203,13 @@ pub fn obs_zone(i: Input<u8>) -> U8Result<FixedOffset> {
 }
 
 // obs-local-part = word *("." word)
+// NOTE Excluding '@' from matches
 pub fn obs_local_part(i: Input<u8>) -> U8Result<&[u8]> {
     matched_by(i, |i| { parse!{i;
-        word();
+        word_not(|c| c == b'@');
         skip_many(|i| parse!{i;
             token(b'.');
-            word();
+            word_not(|c| c == b'@');
 
             ret ()
         });

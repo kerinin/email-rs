@@ -20,6 +20,21 @@ pub fn word(i: Input<u8>) -> U8Result<Vec<u8>> {
        )
 }
 
+pub fn word_not<P>(i: Input<u8>, p: P) -> U8Result<Vec<u8>> where
+P: FnMut(u8) -> bool,
+{
+    or(i,
+       |i| {
+           atom(i).map(|i| {
+               let mut v = Vec::with_capacity(i.len());
+               v.extend(i);
+               v
+           })
+       },
+       |i| quoted_string_not(i, p),
+       )
+}
+
 // phrase = 1*word / obs-phrase
 pub fn phrase(i: Input<u8>) -> U8Result<Vec<u8>> {
     or(i,

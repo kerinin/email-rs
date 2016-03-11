@@ -1,3 +1,5 @@
+use std::iter::FromIterator;
+
 use chomp::*;
 
 use rfc2822::folding::*;
@@ -55,37 +57,42 @@ pub fn quoted_string(i: Input<u8>) -> U8Result<Vec<u8>> {
     }
 }
 
-pub fn quoted_string_not<P>(i: Input<u8>, p: P) -> U8Result<Vec<u8>> where
-P: Fn(u8) -> bool,
+pub fn quoted_string_not<P>(i: Input<u8>, mut p: P) -> U8Result<Vec<u8>> where
+P: FnMut(u8) -> bool,
 {
-    parse!{i;
-        option(cfws, ());
-        dquote();
-        let c = many(|i| {
-            option(i, fws, ()).then(|i| {
-                peek_next(i).bind(|i, next| {
-                    if !p(next) {
-                        qcontent(i)
-                    } else {
-                        i.err(Error::Unexpected)
-                    }
+    option(i, cfws, ()).then(|i| {
+        dquote(i).then(|i| {
+            many1(i, |i| {
+                option(i, fws, ()).then(|i| {
+                    peek_next(i).bind(|i, next| {
+                        if p(next) {
+                            i.err(Error::Unexpected)
+                        } else {
+                            qcontent(i).bind(|i, c| {
+                                i.ret(c)
+                            })
+                        }
+                    })
+                })
+            }).bind(|i, cs| {
+                option(i, fws, ()).then(|i| {
+                    dquote(i).then(|i| {
+                        i.ret(cs)
+                    })
                 })
             })
-        });
-        option(fws, ());
-        dquote();
-
-        ret c
-    }
+        })
+    })
 }
+
 
 #[test]
 fn test_quoted_string_not() {
-    let i = b"jdoe";
+    let i = b"\"jdoe\"";
     let msg = parse_only(|i| quoted_string_not(i, |c| c == b'@'), i);
-    assert!(msg.is_ok());
+    assert_eq!(msg, Ok(FromIterator::from_iter("jdoe".bytes())));
 
-    let i = b"jdoe@example.com";
+    let i = b"\"jdoe\"@example.com";
     let msg = parse_only(|i| quoted_string_not(i, |c| c == b'@'), i);
-    assert!(msg.is_err());
+    assert_eq!(msg, Ok(FromIterator::from_iter("jdoe".bytes())));
 }

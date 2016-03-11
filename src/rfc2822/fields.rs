@@ -14,30 +14,46 @@ use rfc2822::quoted::*;
 
 // orig-date       =       "Date:" date-time CRLF
 pub fn orig_date(i: Input<u8>) -> U8Result<Field> {
-    parse!{i;
-        string(b"Date:");
-        let d = date_time();
-        crlf();
+    println!("orig_date({:?})", i);
+    string(i, b"Date:").then(|i| {
+        println!("orig_date.string(Date:).then({:?})", i);
+        date_time(i).bind(|i, d| {
+            println!("orig_date.date_time.bind({:?}, {:?})", i, d);
+            crlf(i).then(|i| {
+                println!("orig_date.crlf.then({:?})", i);
 
-        ret Field::Date(d)
-    }
+                i.ret(Field::Date(d))
+            })
+        })
+    })
+}
+
+#[test]
+fn test_orig_date() {
+    let i = b"Date: Fri, 21 Nov 1997 09:55:06 -0600\r\n";
+    let msg = parse_only(orig_date, i);
+    assert!(msg.is_ok());
 }
 
 // from            =       "From:" mailbox-list CRLF
 pub fn from(i: Input<u8>) -> U8Result<Field> {
-    parse!{i;
-        string(b"From:");
-        let l = mailbox_list();
-        crlf();
+    println!("from({:?})", i);
 
-        ret Field::From(l)
-    }
+    string(i, b"From:").then(|i| {
+        println!("from.string(From:).then({:?})", i);
+        mailbox_list(i).bind(|i, l| {
+            println!("from.mailbox_list.bind({:?}, {:?})", i, l);
+            crlf(i).then(|i| {
+                println!("from.crlf.then({:?})", i);
+                i.ret(Field::From(l))
+            })
+        })
+    })
 }
 
 #[test]
-#[ignore]
 fn test_from() {
-    let i = b"From: John Doe <jdoe@machine.example>";
+    let i = b"From: John Doe <jdoe@machine.example>\r\n";
     let msg = parse_only(from, i);
     assert!(msg.is_ok());
 }
@@ -66,13 +82,25 @@ pub fn reply_to(i: Input<u8>) -> U8Result<Field> {
 
 // to              =       "To:" address-list CRLF
 pub fn to(i: Input<u8>) -> U8Result<Field> {
-    parse!{i;
-        string(b"To:");
-        let l = address_list();
-        crlf();
+    println!("to({:?})", i);
+    string(i, b"To:").then(|i| {
+        println!("to.string(To:).then({:?})", i);
+        address_list(i).bind(|i, l| {
+            println!("to.address_list.bind({:?}, {:?})", i, l);
+            crlf(i).then(|i| {
+                println!("to.crlf.then({:?})", i);
 
-        ret Field::To(l)
-    }
+                i.ret(Field::To(l))
+            })
+        })
+    })
+}
+
+#[test]
+fn test_to() {
+    let i = b"To: Mary Smith <mary@example.net>\r\n";
+    let msg = parse_only(to, i);
+    assert!(msg.is_ok());
 }
 
 // cc              =       "Cc:" address-list CRLF
@@ -180,6 +208,13 @@ pub fn message_id(i: Input<u8>) -> U8Result<Field> {
     }
 }
 
+#[test]
+fn test_message_id() {
+    let i = b"Message-ID: <1234@local.machine.example>\r\n";
+    let msg = parse_only(message_id, i);
+    assert!(msg.is_ok());
+}
+
 // in-reply-to     =       "In-Reply-To:" 1*msg-id CRLF
 pub fn in_reply_to(i: Input<u8>) -> U8Result<Field> {
     parse!{i;
@@ -204,13 +239,25 @@ pub fn references(i: Input<u8>) -> U8Result<Field> {
 
 // subject         =       "Subject:" unstructured CRLF
 pub fn subject(i: Input<u8>) -> U8Result<Field> {
-    parse!{i;
-        string(b"Subject:");
-        let u = unstructured();
-        crlf();
+    println!("subject({:?})", i);
+    string(i, b"Subject:").then(|i| {
+        println!("subject.string(Subject:).then({:?})", i);
+        unstructured(i).bind(|i, u| {
+            println!("subject.unstructured.bind({:?}, {:?})", i, u);
+            crlf(i).then(|i| {
+                println!("subject.crlf.then({:?})", i);
 
-        ret Field::Subject(u)
-    }
+                i.ret(Field::Subject(u))
+            })
+        })
+    })
+}
+
+#[test]
+fn test_subject() {
+    let i = b"Subject: Saying Hello\r\n";
+    let msg = parse_only(subject, i);
+    assert!(msg.is_ok());
 }
 
 // comments        =       "Comments:" unstructured CRLF
@@ -236,79 +283,79 @@ pub fn keywords(i: Input<u8>) -> U8Result<Field> {
 }
 
 // resent-date     =       "Resent-Date:" date-time CRLF
-pub fn resent_date(i: Input<u8>) -> U8Result<Field> {
+pub fn resent_date(i: Input<u8>) -> U8Result<Resent> {
     parse!{i;
         string(b"Resent-Date:");
         let d = date_time();
         crlf();
 
-        ret Field::ResentDate(d)
+        ret Resent::Date(d)
     }
 }
 
 // resent-from     =       "Resent-From:" mailbox-list CRLF
-pub fn resent_from(i: Input<u8>) -> U8Result<Field> {
+pub fn resent_from(i: Input<u8>) -> U8Result<Resent> {
     parse!{i;
         string(b"Resent-From:");
         let l = mailbox_list();
         crlf();
 
-        ret Field::ResentFrom(l)
+        ret Resent::From(l)
     }
 }
 
 // resent-sender   =       "Resent-Sender:" mailbox CRLF
-pub fn resent_sender(i: Input<u8>) -> U8Result<Field> {
+pub fn resent_sender(i: Input<u8>) -> U8Result<Resent> {
     parse!{i;
         string(b"Resent-Sender:");
         let l = mailbox();
         crlf();
 
-        ret Field::ResentSender(l)
+        ret Resent::Sender(l)
     }
 }
 
 // resent-to       =       "Resent-To:" address-list CRLF
-pub fn resent_to(i: Input<u8>) -> U8Result<Field> {
+pub fn resent_to(i: Input<u8>) -> U8Result<Resent> {
     parse!{i;
         string(b"Resent-To:");
         let l = address_list();
         crlf();
 
-        ret Field::ResentTo(l)
+        ret Resent::To(l)
     }
 }
 
 // resent-cc       =       "Resent-Cc:" address-list CRLF
-pub fn resent_cc(i: Input<u8>) -> U8Result<Field> {
+pub fn resent_cc(i: Input<u8>) -> U8Result<Resent> {
     parse!{i;
         string(b"Resent-Cc:");
         let l = address_list();
         crlf();
 
-        ret Field::ResentCc(l)
+        ret Resent::Cc(l)
     }
 }
 
 // resent-bcc      =       "Resent-Bcc:" (address-list / [CFWS]) CRLF
-pub fn resent_bcc(i: Input<u8>) -> U8Result<Field> {
+pub fn resent_bcc(i: Input<u8>) -> U8Result<Resent> {
     parse!{i;
         string(b"Resent-Bcc:");
         let l = address_list();
         crlf();
 
-        ret Field::ResentBcc(l)
+        ret Resent::Bcc(l)
     }
 }
 
 // resent-msg-id   =       "Resent-Message-ID:" msg-id CRLF
-pub fn resent_msg_id(i: Input<u8>) -> U8Result<Field> {
+pub fn resent_msg_id(i: Input<u8>) -> U8Result<Resent> {
     parse!{i;
         string(b"Resent-Message-ID:");
         let id = msg_id();
         crlf();
 
-        ret Field::ResentMessageID(id)
+        ret Resent::MessageID(id)
     }
 }
 
@@ -332,13 +379,13 @@ pub fn path(i: Input<u8>) -> U8Result<Address> {
 }
 
 // return-path     =       "Return-Path:" path CRLF
-pub fn return_path(i: Input<u8>) -> U8Result<Field> {
+pub fn return_path(i: Input<u8>) -> U8Result<Address> {
     parse!{i;
         string(b"Return-Path:");
         let p = path();
         crlf();
 
-        ret Field::ReturnPath(p)
+        ret p
     }
 }
 
@@ -383,7 +430,7 @@ pub fn name_val_list(i: Input<u8>) -> U8Result<Vec<(&[u8], ReceivedValue)>> {
 }
 
 // received        =       "Received:" name-val-list ";" date-time CRLF
-pub fn received(i: Input<u8>) -> U8Result<Field> {
+pub fn received(i: Input<u8>) -> U8Result<Received> {
     parse!{i;
         string(b"Received:");
         let nvs = name_val_list();
@@ -397,19 +444,20 @@ pub fn received(i: Input<u8>) -> U8Result<Field> {
                 (name, v)
             }).collect();
 
-            Field::Received(name_values, dt)
+            Received{date_time: dt, data: name_values}
         }
     }
 }
 
 // trace           =       [return-path] 1*received
-pub fn trace(i: Input<u8>) -> U8Result<(Option<Field>, Vec<Field>)> {
-    parse!{i;
-        let rp: Option<Field> = option(|i| return_path(i).map(|r| Some(r)), None);
-        let rs = many1(received);
-
-        ret (rp, rs)
-    }
+pub fn trace(i: Input<u8>) -> U8Result<(Option<Address>, Vec<Received>)> {
+    option(i, |i| {
+        return_path(i).map(|r| Some(r))
+    }, None).bind(|i, rp| {
+        many1(i, received).bind(|i, rs| {
+            i.ret((rp, rs))
+        })
+    })
 }
 
 // ftext           =       %d33-57 /               ; Any character except
@@ -426,13 +474,18 @@ pub fn field_name(i: Input<u8>) -> U8Result<Vec<u8>> {
 
 // optional-field  =       field-name ":" unstructured CRLF
 pub fn optional_field(i: Input<u8>) -> U8Result<Field> {
-    parse!{i;
-        let n = field_name();
-        let v = unstructured();
-        crlf();
+    println!("optional_field({:?})", i);
+    field_name(i).bind(|i, n| {
+        println!("optional_field.field_name.bind({:?}, {:?})", i, n);
+        unstructured(i).bind(|i, v| {
+            println!("optional_field.unstructured.bind({:?}, {:?})", i, v);
+            crlf(i).then(|i| {
+                println!("optional_field.crlf.then({:?})", i);
 
-        ret Field::Optional(n, v)
-    }
+                i.ret(Field::Optional(n, v))
+            })
+        })
+    })
 }
 
 // fields          =       *(trace
@@ -499,29 +552,45 @@ pub fn optional_field(i: Input<u8>) -> U8Result<Field> {
 // optional-field  0               unlimited
 //
 // NOTE: This omits some of the structure around trace
-pub fn fields(i: Input<u8>) -> U8Result<Vec<Field>> {
-    many(i, |i| parse!{i;
-        // trace() <|>
-        resent_date() <|>
-            resent_from() <|>
-            resent_sender() <|>
-            resent_to() <|>
-            resent_cc() <|>
-            resent_bcc() <|>
-            resent_msg_id() <|>
-            orig_date() <|>
-            from() <|>
-            sender() <|>
-            reply_to() <|>
-            to() <|>
-            cc() <|>
-            bcc() <|>
-            message_id() <|>
-            in_reply_to() <|>
-            references() <|>
-            subject() <|>
-            comments() <|>
-            keywords() <|>
-            optional_field()
+pub fn fields(i: Input<u8>) -> U8Result<(Vec<Trace>, Vec<Field>)> {
+    many(i, |i| {
+        // traces
+        trace(i).bind(|i, (return_path, received)| {
+            many(i, |i| {
+                    or(i, resent_date,
+                |i| or(i, resent_from,
+                |i| or(i, resent_sender,
+                |i| or(i, resent_to,
+                |i| or(i, resent_cc,
+                |i| or(i, resent_bcc, resent_msg_id))))))
+
+            }).bind(|i, resents| {
+                i.ret(Trace{
+                    return_path: return_path, 
+                    received: received,
+                    fields: resents,
+                })
+            })
+        })
+    }).bind(|i, traces| {
+        many(i, |i| {
+                or(i, orig_date,
+            |i| or(i, from,
+            |i| or(i, sender,
+            |i| or(i, reply_to,
+            |i| or(i, to,
+            |i| or(i, cc,
+            |i| or(i, bcc,
+            |i| or(i, message_id,
+            |i| or(i, in_reply_to,
+            |i| or(i, references,
+            |i| or(i, subject,
+            |i| or(i, comments,
+            |i| or(i, comments,
+            |i| or(i, keywords, optional_field))))))))))))))
+
+        }).bind(|i, fields| {
+            i.ret((traces, fields))
+        })
     })
 }
