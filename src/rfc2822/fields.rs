@@ -411,14 +411,12 @@ pub fn item_name(i: Input<u8>) -> U8Result<&[u8]> {
 
 // item-value      =       1*angle-addr / addr-spec /
 //                          atom / domain / msg-id
-// NOTE: I'm switching the order such that atom is the last matcher becasue it
-// prematurely matches for some domains
 pub fn item_value(i: Input<u8>) -> U8Result<ReceivedValue> {
     or(i, 
        |i| many1(i, angle_addr).map(|a| ReceivedValue::Addresses(a)),
        |i| or(i, |i| addr_spec(i).map(|a| ReceivedValue::Address(a)),
-       |i| or(i, |i| domain(i).map(|v| ReceivedValue::Domain(v)), 
        |i| or(i, |i| atom(i).map(|v| ReceivedValue::Text(FromIterator::from_iter(v.iter().map(|i| i.clone())))),
+       |i| or(i, |i| domain(i).map(|v| ReceivedValue::Domain(v)), 
               |i| msg_id(i).map(|v| ReceivedValue::MessageID(v))))))
 }
 
@@ -451,23 +449,23 @@ pub fn name_val_list(i: Input<u8>) -> U8Result<Vec<(&[u8], ReceivedValue)>> {
 }
 
 // received        =       "Received:" name-val-list ";" date-time CRLF
+// NOTE: This field is more complex than I feel like supporting - punting on
+// parsing its contents.  Effective match is:
+// received        =       "Received:" *(%d0-58 / %d60-255) ";" date-time CRLF
 pub fn received(i: Input<u8>) -> U8Result<Received> {
     println!("received({:?})", i);
     string(i, b"Received:").then(|i| {
         println!("received.string(Received:).then");
-        name_val_list(i).bind(|i, nvs| {
-            println!("received.name_val_list.bind({:?})", nvs);
+
+        take_till(i, |c| c == b';').bind(|i, v| {
             token(i, b';').then(|i| {
                 println!("received.token.then");
                 date_time(i).bind(|i, dt| {
                     println!("received.date_time.bind({:?})", dt);
                     crlf(i).then(|i| {
                         println!("received.crlf.then");
-                        let name_values = nvs.into_iter().map(|(n, v)| {
-                            let name = FromIterator::from_iter(n.iter().map(|i| i.clone()));
-                            (name, v)
-                        }).collect();
-                        let r = Received{date_time: dt, data: name_values};
+
+                        let r = Received{date_time: dt, data: FromIterator::from_iter(v.iter().map(|i| i.clone()))};
                         println!("-> received({:?})", r);
 
                         i.ret(r)
@@ -480,11 +478,11 @@ pub fn received(i: Input<u8>) -> U8Result<Received> {
 
 #[test]
 fn test_received() {
-    let i = b"Received: from machine.example by x.y.test; 21 Nov 1997 10:01:22 -0600";
+    let i = b"Received: from machine.example by x.y.test; 21 Nov 1997 10:01:22 -0600\r\n";
     let msg = parse_only(received, i);
     assert!(msg.is_ok());
 
-    let i = b"Received: from x.y.test\r\n   by example.net\r\n   via TCP\r\n   with ESMTP\r\n   id ABC12345\r\n   for <mary@example.net>;  21 Nov 1997 10:05:43 -0600";
+    let i = b"Received: from x.y.test\r\n   by example.net\r\n   via TCP\r\n   with ESMTP\r\n   id ABC12345\r\n   for <mary@example.net>;  21 Nov 1997 10:05:43 -0600\r\n";
     let msg = parse_only(received, i);
     assert!(msg.is_ok());
 }

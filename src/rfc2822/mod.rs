@@ -83,7 +83,7 @@ pub enum ReceivedValue {
 #[derive(Debug)]
 pub struct Received {
     pub date_time: DateTime<FixedOffset>,
-    pub data: Vec<(Vec<u8>, ReceivedValue)>,
+    pub data: Vec<u8>,
 }
 
 #[derive(Debug)]
