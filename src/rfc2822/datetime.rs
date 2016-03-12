@@ -155,56 +155,101 @@ pub fn time_of_day(i: Input<u8>) -> U8Result<NaiveTime> {
 
 // zone = (( "+" / "-" ) 4DIGIT) / obs-zone
 pub fn zone(i: Input<u8>) -> U8Result<FixedOffset> {
-    parse!{i;
-        or(
-            |i| { parse!{i;
-                let s = satisfy(|i| i == b'+' || i == b'-');
-                let n = parse_digits(4);
+    println!("zone({:?})", i);
+    
+    let a = |i| {
+        or(i, |i| token(i, b'+'), |i| token(i, b'-')).bind(|i, sign| {
+            println!("zone.or(+,-).bind(({:?}, {:?})", i, sign);
 
-                ret match s {
-                    b'+' => FixedOffset::east(n),
-                    _ => FixedOffset::west(n),
-                }
-            }},
-            obs_zone,
-            )
-    }
+            parse_digits(i, 4).bind(|i, offset| {
+                println!("zone.parse_digits(4).bind(({:?}, {:?})", i, offset);
+
+                let zone = match sign {
+                    b'+' => FixedOffset::east(offset),
+                    _ => FixedOffset::west(offset),
+                };
+
+                i.ret(zone)
+            })
+        })
+    };
+
+    or(i, a, obs_zone)
+}
+
+#[test]
+fn test_zone() {
+    let i = b"-0330";
+    let msg = parse_only(zone, i);
+    assert!(msg.is_ok());
 }
 
 // time = time-of-day FWS zone
 pub fn time(i: Input<u8>) -> U8Result<(NaiveTime, FixedOffset)> {
-    parse!{i;
-        let t = time_of_day();
-        fws();
-        let z = zone();
+    time_of_day(i).bind(|i, t| {
+        println!("time.time_of_day.bind({:?}, {:?})", i, t);
 
-        ret (t, z)
-    }
+        fws(i).then(|i| {
+            println!("time.fws");
+
+            zone(i).bind(|i, z| {
+                println!("time.zone.bind({:?}, {:?})", i, z);
+
+                i.ret((t, z))
+            })
+        })
+    })
+}
+
+#[test]
+fn test_time() {
+    let i = b"23:32\r\n               -0330";
+    let msg = parse_only(time, i);
+    assert!(msg.is_ok());
 }
 
 // date-time = [ day-of-week "," ] date FWS time [CFWS]
 pub fn date_time(i: Input<u8>) -> U8Result<DateTime<FixedOffset>> {
     println!("date_time({:?})", i);
+
     option(i, |i| {
         println!("date_time.option({:?})", i);
+
         day_of_week(i).then(|i| {
             println!("date_time.day_of_week({:?})", i);
+
             token(i, b',').then(|i| {
                 println!("date_time.token(b).then({:?})", i);
+
                 i.ret(())
             })
         })
     }, ()).then(|i| {
         println!("date_time.option.then({:?})", i);
+
         date(i).bind(|i, d| {
             println!("date_time.date.bind({:?}, {:?})", i, d);
+
             fws(i).then(|i| {
                 println!("date_time.fws.then({:?})", i);
+
                 time(i).bind(|i, t| {
                     println!("date_time.time.bind({:?}, {:?})", i, t);
-                    i.ret(DateTime::from_utc(NaiveDateTime::new(d, t.0), t.1))
+
+                    option(i, cfws, ()).then(|i| {
+                        println!("date_time.option(cfws).then({:?})", i);
+
+                        i.ret(DateTime::from_utc(NaiveDateTime::new(d, t.0), t.1))
+                    })
                 })
             })
         })
     })
+}
+
+#[test]
+fn test_date_time() {
+    let i = b"Thu,\r\n      13\r\n        Feb\r\n          1969\r\n 23:32\r\n               -0330 (Newfoundland Time)\r\n";
+    let msg = parse_only(date_time, i);
+    assert!(msg.is_ok());
 }

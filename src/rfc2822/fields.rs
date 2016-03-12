@@ -15,10 +15,13 @@ use rfc2822::quoted::*;
 // orig-date       =       "Date:" date-time CRLF
 pub fn orig_date(i: Input<u8>) -> U8Result<Field> {
     println!("orig_date({:?})", i);
+    
     string(i, b"Date:").then(|i| {
         println!("orig_date.string(Date:).then({:?})", i);
+
         date_time(i).bind(|i, d| {
             println!("orig_date.date_time.bind({:?}, {:?})", i, d);
+
             crlf(i).then(|i| {
                 println!("orig_date.crlf.then({:?})", i);
 

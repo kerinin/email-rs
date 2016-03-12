@@ -184,6 +184,8 @@ pub fn obs_second(i: Input<u8>) -> U8Result<usize> {
 // unless there is out-of-band information confirming their meaning."
 //
 pub fn obs_zone(i: Input<u8>) -> U8Result<FixedOffset> {
+    println!("obs_zone({:?})", i);
+
     or(i, |i| string(i, b"UT").then(|i| i.ret(0)),
     |i| or(i, |i| string(i, b"GMT").then(|i| i.ret(0)),
     |i| or(i, |i| string(i, b"EST").then(|i| i.ret(-5)),
@@ -200,6 +202,13 @@ pub fn obs_zone(i: Input<u8>) -> U8Result<FixedOffset> {
     |i| or(i, |i| satisfy(i, |i| 107 <= i && i <= 122).then(|i| i.ret(0)),
     |i| skip_many1(i, alpha).then(|i| i.ret(0)),
     )))))))))))))).map(|o| FixedOffset::west(o))
+}
+
+#[test]
+fn test_obs_zone() {
+    let i = b"-0330 (Newfoundland Time)\r\n";
+    let msg = parse_only(obs_zone, i);
+    assert!(msg.is_err());
 }
 
 // obs-local-part = word *("." word)
