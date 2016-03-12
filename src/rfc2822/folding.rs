@@ -62,24 +62,72 @@ pub fn ccontent(i: Input<u8>) -> U8Result<()> {
        },)
 }
 
+fn fws_comment(i: Input<u8>) -> U8Result<()> {
+    // println!("fws_comment({:?})", i);
+    option(i, fws, ()).then(|i| {
+        // println!("fws_comment.option(fws).then({:?})", i);
+        comment(i)
+    })
+}
+
 // CFWS = *([FWS] comment) (([FWS] comment) / FWS)
-// NOTE: Because this is a greedy match, this uses the following:
-// CFWS = *([FWS] comment) [FWS]
+//
+// This is tricky for a greedy matcher.
+// What's happening here is that *([FWS] comment) is consuming all the instances
+// of that pattern, and then the ([FWS] comment) fails
+//
+// This should be equivalent:
+// CFWS = 1*([FWS] comment) [FWS] / (*([FWS] comment) FWS)
+//
 pub fn cfws(i: Input<u8>) -> U8Result<()> {
-    let fws_comment = |i| {
-        option(i, fws, ()).then(|i| {
-            comment(i)
+    println!("cfws({:?})", i);
+
+    let repeat = |i| {
+        many1(i, fws_comment).map(|_: Vec<()>| ()).then(|i| {
+            option(i, fws, ()).then(|i| {
+                println!("cfws.repeat");
+
+                i.ret(())
+            })
         })
     };
 
-    skip_many(i, fws_comment).then(|i| {
-        option(i, fws, ())
+    let fws_term = |i| {
+        many(i, fws_comment).map(|_: Vec<()>| ()).then(|i| {
+            println!("cfws.fws_term");
+            fws(i)
+        })
+    };
+
+    or(i, repeat, fws_term).then(|i| {
+        println!("-> cfws.or(repeat, fws_term).then({:?})", i);
+        i.ret(())
     })
 }
 
 #[test]
 fn test_cfws() {
     let i = b"(his account)";
+    let msg = parse_only(cfws, i);
+    assert!(msg.is_ok());
+
+    let i = b"\r\n ";
+    let msg = parse_only(cfws, i);
+    assert!(msg.is_ok());
+
+    let i = b"(comment)\r\n ";
+    let msg = parse_only(cfws, i);
+    assert!(msg.is_ok());
+
+    let i = b"(comment)(comment)\r\n ";
+    let msg = parse_only(cfws, i);
+    assert!(msg.is_ok());
+
+    let i = b"(comment)\r\n (comment)\r\n ";
+    let msg = parse_only(cfws, i);
+    assert!(msg.is_ok());
+
+    let i = b"\r\n (comment)\r\n (comment)\r\n ";
     let msg = parse_only(cfws, i);
     assert!(msg.is_ok());
 }

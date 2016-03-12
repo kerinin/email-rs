@@ -61,6 +61,10 @@ pub fn from(i: Input<u8>) -> U8Result<Field> {
 
 #[test]
 fn test_from() {
+    let i = b"From: Joe Q. Public <john.q.public@example.com>\r\n";
+    let msg = parse_only(from, i);
+    assert!(msg.is_ok());
+
     let i = b"From: John Doe <jdoe@machine.example>\r\n";
     let msg = parse_only(from, i);
     assert!(msg.is_ok());
@@ -123,10 +127,13 @@ fn test_to() {
 // cc              =       "Cc:" address-list CRLF
 pub fn cc(i: Input<u8>) -> U8Result<Field> {
     println!("cc({:?})", i);
+
     string(i, b"Cc:").then(|i| {
         println!("cc.string(Cc:).then({:?})", i);
+
         address_list(i).bind(|i, l| {
             println!("cc.address_list.bind({:?}, {:?})", i, l);
+
             crlf(i).then(|i| {
                 println!("cc.crlf.then({:?})", i);
                 println!("-> cc({:?})", l);

@@ -16,6 +16,14 @@ pub fn display_name(i: Input<u8>) -> U8Result<Vec<u8>> {
 
 #[test]
 fn test_display_name() {
+    let i = b"A Group(Some people)\r\n     ";
+    let msg = parse_only(display_name, i);
+    assert!(msg.is_ok());
+
+    let i = b"Joe Q. Public";
+    let msg = parse_only(display_name, i);
+    assert!(msg.is_ok());
+
     let i = b"Pete(A wonderful \\) chap)";
     let msg = parse_only(display_name, i);
     assert!(msg.is_ok());
@@ -173,12 +181,47 @@ fn test_angle_addr() {
 }
 
 // name-addr = [display-name] angle-addr
+//
+// NOTE: In some cases, display-name successfully matches a subset of the 
+// "correct" value.  We need to ensure that [CFWS] "<" follows the match.
+//
+// To demonstrate, lets expand display-name out:
+//
+// display-name = phrase
+// phrase = 1*word / obs-phrase
+// word = atom / quoted-string
+// atom = [CFWS] 1*atext [CFWS]
+// atext           =       ALPHA / DIGIT / ; Any character except controls,
+//                         "!" / "#" /     ;  SP, and specials.
+//                         "$" / "%" /     ;  Used for atoms
+//                         "&" / "'" /
+//                         "*" / "+" /
+//                         "-" / "/" /
+//                         "=" / "?" /
+//                         "^" / "_" /
+//                         "`" / "{" /
+//                         "|" / "}" /
+//                         "~"
+// obs-phrase = word *(word / "." / CFWS)
+//
+// So specifically, foo.bar <foo@example.com> fails to match becasue "foo" 
+// matches phrase, but ".bar <foo@example.com>" does not match angle-addr.
+//
+// To "fix" this, I'm using obs-phrase rather than display-name.  obs-phrase is
+// a superset of 1*word, which means it covers phrase, and therefore display-name.
+// The effective pattern is:
+//
+// name-addr = [obs-phrase] angle-addr
+//
 pub fn name_addr(i: Input<u8>) -> U8Result<Address> {
     println!("name_addr({:?})", i);
-    option(i, |i| display_name(i).map(|v| Some(v)), None).bind(|i, n| {
-        println!("name_addr.display_name.bind({:?}, {:?})", i, n);
+
+    option(i, |i| obs_phrase(i).map(|v| Some(v)), None).bind(|i, n| {
+        println!("name_addr.obs_phrase.bind({:?}, {:?})", i, n);
+        
         angle_addr(i).bind(|i, a| {
             println!("name_addr.angle_addr.bind({:?}, {:?})", i, a);
+
             match a {
                 Address::Mailbox{local_part: l, domain: d, display_name: _} => {
                     let mb = Address::Mailbox{
@@ -199,6 +242,10 @@ pub fn name_addr(i: Input<u8>) -> U8Result<Address> {
 
 #[test]
 fn test_name_addr() {
+    let i = b"Joe Q. Public <john.q.public@example.com>";
+    let msg = parse_only(name_addr, i);
+    assert!(msg.is_ok());
+
     let i = b"John Doe <jdoe@machine.example>";
     let msg = parse_only(name_addr, i);
     assert!(msg.is_ok());
@@ -219,6 +266,13 @@ pub fn mailbox(i: Input<u8>) -> U8Result<Address> {
         println!("-> mailbox({:?})", v);
         i.ret(v)
     })
+}
+
+#[test]
+fn test_mailbox() {
+    let i = b"Joe Q. Public <john.q.public@example.com>";
+    let msg = parse_only(mailbox, i);
+    assert!(msg.is_ok());
 }
 
 // mailbox-list = (mailbox *("," mailbox)) / obs-mbox-list
@@ -246,6 +300,10 @@ pub fn mailbox_list(i: Input<u8>) -> U8Result<Vec<Address>> {
 
 #[test]
 fn test_mailbox_list() {
+    let i = b"Joe Q. Public <john.q.public@example.com>";
+    let msg = parse_only(mailbox_list, i);
+    assert!(msg.is_ok());
+
     let i = b"John Doe <jdoe@machine.example>";
     let msg = parse_only(mailbox_list, i);
     assert!(msg.is_ok());
@@ -257,22 +315,33 @@ fn test_mailbox_list() {
 
 // group           =       display-name ":" [mailbox-list / CFWS] ";"
 //                         [CFWS]
+//
+// NOTE: Using obs-phrase in place of display-name - see comment on name-addr
+// for more detail.  Effective pattern:
+//
+// group           =       obs-phrase ":" [mailbox-list / CFWS] ";" [CFWS]
 pub fn group(i: Input<u8>) -> U8Result<Address> {
     println!("group({:?})", i);
-    display_name(i).bind(|i, n| {
-        println!("group.display_name.bind({:?})", n);
+
+    obs_phrase(i).bind(|i, n| {
+        println!("group.obs_phrase.bind({:?})", n);
+
         token(i, b':').then(|i| {
             println!("group.token(:)");
+
             let list_or_none = |i| {
                 or(i, mailbox_list, |i| cfws(i).map(|_| vec!()))
             };
 
             option(i, list_or_none, vec!()).bind(|i, ms| {
-                println!("group.option(list_or_none).bind({:?})", ms);
+                println!("group.option(list_or_none).bind({:?}, {:?})", i, ms);
+
                 token(i, b';').then(|i| {
                     println!("group.token(;)");
+
                     option(i, cfws, ()).then(|i| {
                         println!("group.option(cfws)");
+
                         let g = Address::Group{
                             // NOTE: Encoding?
                             display_name: String::from_utf8(n).unwrap(),
@@ -289,6 +358,10 @@ pub fn group(i: Input<u8>) -> U8Result<Address> {
 
 #[test]
 fn test_group() {
+    let i = b"(Empty list)(start)Undisclosed recipients  :(nobody(that I know))  ;";
+    let msg = parse_only(group, i);
+    assert!(msg.is_ok());
+
     let i = b"A Group(Some people)\r\n     :Chris Jones <c@(Chris's host.)public.example>,\r\n         joe@example.org,\r\n  John <jdoe@one.test> (my dear friend); (the end of the group)";
     let msg = parse_only(group, i);
     assert!(msg.is_ok());
@@ -317,6 +390,10 @@ pub fn address_list(i: Input<u8>) -> U8Result<Vec<Address>> {
 
 #[test]
 fn test_address_list() {
+    let i = b"(Empty list)(start)Undisclosed recipients  :(nobody(that I know))  ;";
+    let msg = parse_only(address_list, i);
+    assert!(msg.is_ok());
+
     let i = b"A Group(Some people)\r\n     :Chris Jones <c@(Chris's host.)public.example>,\r\n         joe@example.org,\r\n  John <jdoe@one.test> (my dear friend); (the end of the group)";
     let msg = parse_only(address_list, i);
     assert!(msg.is_ok());

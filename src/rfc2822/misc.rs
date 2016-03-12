@@ -8,9 +8,11 @@ use rfc2822::quoted::*;
 
 // word = atom / quoted-string
 pub fn word(i: Input<u8>) -> U8Result<Vec<u8>> {
+    println!("word({:?})", i);
     or(i,
        |i| {
            atom(i).map(|i| {
+               println!("word.atom.map({:?})", i);
                let mut v = Vec::with_capacity(i.len());
                v.extend(i);
                v
@@ -37,14 +39,22 @@ P: FnMut(u8) -> bool,
 
 // phrase = 1*word / obs-phrase
 pub fn phrase(i: Input<u8>) -> U8Result<Vec<u8>> {
-    or(i,
-       |i| { parse!{i;
-           let wv: Vec<Vec<u8>> = many1(word);
+    let a = |i| {
+        many1(i, word).map(|ws: Vec<Vec<u8>>| {
+            println!("phrase.many1(word).map({:?})", ws);
 
-           ret wv.into_iter().flat_map(|i| i).collect()
-       }},
-       obs_phrase,
-       )
+            ws.into_iter().flat_map(|i| i).collect()
+        })
+    };
+
+    or(i, a, obs_phrase)
+}
+
+#[test]
+fn test_phrase() {
+    let i = b"Joe Q. Public";
+    let msg = parse_only(phrase, i);
+    assert!(msg.is_ok());
 }
 
 

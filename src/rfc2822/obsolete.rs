@@ -1,4 +1,5 @@
 use chomp::*;
+use chomp::combinators::bounded;
 use chrono::offset::fixed::FixedOffset;
 
 use util::*;
@@ -61,28 +62,58 @@ pub fn obs_fws(i: Input<u8>) -> U8Result<()> {
 }
 
 // obs-phrase = word *(word / "." / CFWS)
+// TODO: Figure out how this gets stuck...
 pub fn obs_phrase(i: Input<u8>) -> U8Result<Vec<u8>> {
-    let r = parse!{i;
-        let w1: Vec<u8> = word();
-        let wv: Vec<Vec<u8>> = many(|i| {
-            or(i,
-               word,
-               |i| or(i,
-                      |i| token(i, b'.').map(|_| vec!(b'.')),
-                      |i| cfws(i).map(|_| vec!()),
-                      )
-              )
-        });
+    word(i).bind(|i, w1| {
+        println!("obs_phrase.word.bind({:?}, {:?})", i, w1);
 
-        ret (w1, wv)
-    };
+        let a = |i| {
+            println!("obs_phrase.many({:?})", i);
 
-    r.map(|(w1, wv)| {
-        wv.into_iter().fold(w1, |mut acc, mut wn| {
-            acc.append(&mut wn);
-            acc
+            let w = |i| {
+                word(i).bind(|i, v| {
+                    println!("obs_phrase.word.bind({:?}, {:?})", i, v);
+                    i.ret(v)
+                })
+            };
+            let t = |i| {
+                token(i, b'.').map(|_| vec!(b'.')).bind(|i, v| {
+                    println!("obs_phrase.token.bind({:?}, {:?})", i, v);
+                    i.ret(v)
+                })
+            };
+            let c = |i| {
+               cfws(i).map(|_| vec!()).bind(|i, v| {
+                    println!("obs_phrase.cfws.bind({:?}, {:?})", i, v);
+                    i.ret(v)
+               })
+            };
+
+            or(i, w, |i| or(i, t, c))
+               //     or(i, word,
+               // |i| or(i, |i| token(i, b'.').map(|_| vec!(b'.')), 
+               //           |i| cfws(i).map(|_| vec!())))
+        };
+
+        // TODO: Fix cfws cycle, then remove the bound here...
+        bounded::many(i, (0..10), a).bind(|i, ws: Vec<Vec<u8>>| {
+            println!("obs_phrase.many(a).bind({:?}, {:?})", i, ws);
+
+            let words = ws.into_iter().fold(w1, |mut acc, mut wn| {
+                acc.append(&mut wn);
+                acc
+            });
+
+            i.ret(words)
         })
     })
+}
+
+#[test]
+fn test_obs_phrase() {
+    let i = b"Joe Q. Public";
+    let msg = parse_only(obs_phrase, i);
+    assert!(msg.is_ok());
 }
 
 // obs-day-of-week = [CFWS] day-name [CFWS]
