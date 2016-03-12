@@ -61,6 +61,10 @@ pub fn local_part(i: Input<u8>) -> U8Result<Vec<u8>> {
 
 #[test]
 fn test_local_part() {
+    // let i = b"@machine.tld:mary@example.net";
+    // let msg = parse_only(local_part, i);
+    // assert!(msg.is_ok());
+
     let i = b"pete(his account)";
     let msg = parse_only(local_part, i);
     assert!(msg.is_ok());
@@ -101,17 +105,57 @@ pub fn domain_literal(i: Input<u8>) -> U8Result<Vec<u8>> {
 }
 
 // domain = dot-atom / domain-literal / obs-domain
+//
+// NOTE: In some cases, dot-atom successfully matches a subset of the 
+// "correct" value.
+//
+// To demonstrate, lets expand domain out (substituting dot-atom, dot-atom-text,
+// obs-domain and atom):
+//
+// dot-atom = [CFWS] 1*atext *("." 1*atext) [CFWS]
+// obs-domain = [CFWS] 1*atext [CFWS] *("." ([CFWS] 1*atext [CFWS]))
+//
+// As you can see, obs-domain is a superset of dot-atom.  We'll check it first
+// yielding the effective pattern:
+//
+// domain = obs-domain / dot-atom / domain-literal
+//
 pub fn domain(i: Input<u8>) -> U8Result<Vec<u8>> {
-    or(i,
-       |i| dot_atom(i).bind(|i, v| i.ret(FromIterator::from_iter(v.iter().map(|i| i.clone())))),
-       |i| or(i,
-              domain_literal,
-              |i| obs_domain(i).bind(|i, v| i.ret(FromIterator::from_iter(v.iter().map(|i| i.clone())))),
-              ))
+    println!("domain({:?})", i);
+
+    let a = |i| {
+        dot_atom(i).bind(|i, v| {
+            println!("domain.dot_atom.bind({:?}, {:?})", i, v);
+
+            i.ret(FromIterator::from_iter(v.iter().map(|i| i.clone())))
+        })
+    };
+
+    let b = |i| {
+        domain_literal(i).bind(|i, v| {
+            println!("domain.domain_literal.bind({:?}, {:?})", i, v);
+            
+            i.ret(v)
+        })
+    };
+
+    let c = |i| {
+        obs_domain(i).bind(|i, v| {
+            println!("domain.obs_domain.bind({:?}, {:?})", i, v);
+
+            i.ret(FromIterator::from_iter(v.iter().map(|i| i.clone())))
+        })
+    };
+
+    or(i, c, |i| or(i, a, b))
 }
 
 #[test]
 fn test_domain() {
+    let i = b"test   . example";
+    let msg = parse_only(domain, i);
+    assert!(msg.is_ok());
+
     let i = b"silly.test(his host)";
     let msg = parse_only(domain, i);
     assert!(msg.is_ok());
@@ -143,6 +187,10 @@ pub fn addr_spec(i: Input<u8>) -> U8Result<Address> {
 
 #[test]
 fn test_addr_spec() {
+    // let i = b"@machine.tld:mary@example.net";
+    // let msg = parse_only(addr_spec, i);
+    // assert!(msg.is_ok());
+
     let i = b"pete(his account)@silly.test(his host)";
     let msg = parse_only(addr_spec, i);
     assert!(msg.is_ok());
@@ -270,6 +318,14 @@ pub fn mailbox(i: Input<u8>) -> U8Result<Address> {
 
 #[test]
 fn test_mailbox() {
+    // let i = b"Mary Smith <@machine.tld:mary@example.net>";
+    // let msg = parse_only(mailbox, i);
+    // assert!(msg.is_ok());
+
+    let i = b"jdoe@test   . example";
+    let msg = parse_only(mailbox, i);
+    assert!(msg.is_ok());
+
     let i = b"Joe Q. Public <john.q.public@example.com>";
     let msg = parse_only(mailbox, i);
     assert!(msg.is_ok());
@@ -378,11 +434,13 @@ pub fn address(i: Input<u8>) -> U8Result<Address> {
 }
 
 // address-list    =       (address *("," address)) / obs-addr-list
+//
+// NOTE: Accepting obsolete syntax first as it's more generic
 pub fn address_list(i: Input<u8>) -> U8Result<Vec<Address>> {
     println!("address_list({:?})", i);
     let a = |i| sep_by1(i, address, |i| token(i, b','));
 
-    or(i, a, obs_addr_list).bind(|i, v| {
+    or(i, obs_addr_list, a).bind(|i, v| {
         println!("-> address_list({:?})", v);
         i.ret(v)
     })
@@ -390,6 +448,18 @@ pub fn address_list(i: Input<u8>) -> U8Result<Vec<Address>> {
 
 #[test]
 fn test_address_list() {
+    let i = b"John Doe <jdoe@machine(comment).  example>";
+    let msg = parse_only(address_list, i);
+    assert!(msg.is_ok());
+
+    let i = b"Mary Smith <mary@example.net>, , jdoe@test   . example";
+    let msg = parse_only(address_list, i);
+    assert!(msg.is_ok());
+
+    // let i = b"Mary Smith <@machine.tld:mary@example.net>, , jdoe@test   . example";
+    // let msg = parse_only(address_list, i);
+    // assert!(msg.is_ok());
+
     let i = b"(Empty list)(start)Undisclosed recipients  :(nobody(that I know))  ;";
     let msg = parse_only(address_list, i);
     assert!(msg.is_ok());

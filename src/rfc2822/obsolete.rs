@@ -150,17 +150,21 @@ pub fn obs_month(i: Input<u8>) -> U8Result<Month> {
 }
 
 // obs-year = [CFWS] 2*DIGIT [CFWS]
+// NOTE: obs-year is only used in year, which is only used in date,
+// which is only used in date-time, which is broken by the terminal [CFWS] 
+// because it prevents FWS from ever matching.  So I'm dropping it - effective:
+// obs-year = [CFWS] 2*DIGIT
 pub fn obs_year(i: Input<u8>) -> U8Result<usize> {
-    parse!{i;
-        option(cfws, ());
-        let y = or(
-            |i| parse_digits(i, (2..)),
-            obs_year,
-            );
-        option(cfws, ());
-
-        ret y
-    }
+    option(i, cfws, ()).then(|i| {
+        parse_digits(i, (2..4)).bind(|i, y: usize| {
+            let actual_year = if y < 49 {
+                y + 2000
+            } else {
+                y + 1900
+            };
+            i.ret(actual_year)
+        })
+    })
 }
 
 // obs-hour = [CFWS] 2DIGIT [CFWS]

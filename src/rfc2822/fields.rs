@@ -33,6 +33,19 @@ pub fn orig_date(i: Input<u8>) -> U8Result<Field> {
 
 #[test]
 fn test_orig_date() {
+    // NOTE: Need to support obsolete fields syntax for this
+    // let i = b"Date  : Fri, 21 Nov 1997 09(comment):   55  :  06 -0600\r\n";
+    // let msg = parse_only(orig_date, i);
+    // assert!(msg.is_ok());
+
+    let i = b"Date: 21 Nov 97 09:55:06 GMT\r\n";
+    let msg = parse_only(orig_date, i);
+    assert!(msg.is_ok());
+
+    let i = b"Date: Tue, 1 Jul 2003 10:52:37 +0200\r\n"; 
+    let msg = parse_only(orig_date, i);
+    assert!(msg.is_ok());
+
     let i = b"Date: Thu,\r\n      13\r\n        Feb\r\n          1969\r\n 23:32\r\n               -0330 (Newfoundland Time)\r\n";
     let msg = parse_only(orig_date, i);
     assert!(msg.is_ok());
@@ -61,6 +74,11 @@ pub fn from(i: Input<u8>) -> U8Result<Field> {
 
 #[test]
 fn test_from() {
+    // NOTE: Need to support obsolete fields syntax for this
+    // let i = b"From  : John Doe <jdoe@machine(comment).  example>\r\n";
+    // let msg = parse_only(from, i);
+    // assert!(msg.is_ok());
+
     let i = b"From: Joe Q. Public <john.q.public@example.com>\r\n";
     let msg = parse_only(from, i);
     assert!(msg.is_ok());
@@ -115,6 +133,15 @@ pub fn to(i: Input<u8>) -> U8Result<Field> {
 
 #[test]
 fn test_to() {
+    // NOTE: Need to support obsolete fields syntax for this
+    // let i = b"To    : Mary Smith\r\n__\r\n          <mary@example.net>\r\n";
+    // let msg = parse_only(to, i);
+    // assert!(msg.is_ok());
+
+    let i = b"To: Mary Smith <mary@example.net>, , jdoe@test   . example\r\n";
+    let msg = parse_only(to, i);
+    assert!(msg.is_ok());
+
     let i = b"To:A Group(Some people)\r\n     :Chris Jones <c@(Chris's host.)public.example>,\r\n         joe@example.org,\r\n  John <jdoe@one.test> (my dear friend); (the end of the group)\r\n";
     let msg = parse_only(to, i);
     assert!(msg.is_ok());
@@ -247,6 +274,15 @@ pub fn message_id(i: Input<u8>) -> U8Result<Field> {
 
 #[test]
 fn test_message_id() {
+    // NOTE: Need to support obsolete fields syntax for this
+    // let i = b"Message-ID  : <1234   @   local(blah)  .machine .example>\r\n";
+    // let msg = parse_only(message_id, i);
+    // assert!(msg.is_ok());
+
+    let i = b"Message-ID: <5678.21-Nov-1997@example.com>\r\n";
+    let msg = parse_only(message_id, i);
+    assert!(msg.is_ok());
+
     let i = b"Message-ID: <1234@local.machine.example>\r\n";
     let msg = parse_only(message_id, i);
     assert!(msg.is_ok());
@@ -293,6 +329,11 @@ pub fn subject(i: Input<u8>) -> U8Result<Field> {
 
 #[test]
 fn test_subject() {
+    // NOTE: Need to support obsolete fields syntax for this
+    // let i = b"To    : Mary Smith\r\n";
+    // let msg = parse_only(subject, i);
+    // assert!(msg.is_ok());
+
     let i = b"Subject: Saying Hello\r\n";
     let msg = parse_only(subject, i);
     assert!(msg.is_ok());

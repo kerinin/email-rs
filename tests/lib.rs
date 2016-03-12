@@ -100,7 +100,7 @@ fn example_3_1() {
     }
 }
 
-// Requires obsolete header fields
+// NOTE: Need to support obsolete fields syntax for this
 #[test]
 #[ignore]
 fn example_3_2() {
@@ -138,6 +138,7 @@ fn example_5() {
     }
 }
 
+// NOTE: Need to support crazy email address syntax for this
 #[test]
 #[ignore]
 fn example_6_1() {
@@ -152,7 +153,6 @@ fn example_6_1() {
 }
 
 #[test]
-#[ignore]
 fn example_6_2() {
     let raw = include_bytes!("example_6_2.eml");
     let msg = parse_only(message, raw);
@@ -164,6 +164,7 @@ fn example_6_2() {
     }
 }
 
+// NOTE: Need to support obsolete fields syntax for this
 #[test]
 #[ignore]
 fn example_6_3() {

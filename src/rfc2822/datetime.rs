@@ -85,21 +85,33 @@ pub fn month(i: Input<u8>) -> U8Result<Month> {
 
 // year = 4*DIGIT / obs-year
 pub fn year(i: Input<u8>) -> U8Result<usize> {
-    parse!{i;
-        or(
-            |i| parse_digits(i, (4..)),
-            obs_year,
-            )
-    }
+    let a = |i| {
+        parse_digits(i, (4..)).bind(|i, v| {
+            println!("year.parse_digits.bind({:?}, {:?})", i, v);
+            i.ret(v)
+        })
+    };
+
+    let b = |i| {
+        obs_year(i).bind(|i, v| {
+            println!("year.obs_year.bind({:?}, {:?})", i, v);
+            i.ret(v)
+        })
+    };
+
+    or(i, a, b)
 }
 
 // date = day month year
 pub fn date(i: Input<u8>) -> U8Result<NaiveDate> {
     println!("date({:?})", i);
+
     day(i).bind(|i, d| {
         println!("date.day.bind({:?}, {:?})", i, d);
+
         month(i).bind(|i, m| {
             println!("date.month.bind({:?}, {:?})", i, m);
+
             year(i).bind(|i, y| {
                 println!("date.year.bind({:?}, {:?})", i, y);
 
@@ -107,6 +119,13 @@ pub fn date(i: Input<u8>) -> U8Result<NaiveDate> {
             })
         })
     })
+}
+
+#[test]
+fn test_date() {
+    let i = b"21 Nov 97";
+    let msg = parse_only(date, i);
+    assert!(msg.is_ok());
 }
 
 // hour = 2DIGIT / obs-hour
@@ -203,6 +222,10 @@ pub fn time(i: Input<u8>) -> U8Result<(NaiveTime, FixedOffset)> {
 
 #[test]
 fn test_time() {
+    let i = b"09:55:06 GMT";
+    let msg = parse_only(time, i);
+    assert!(msg.is_ok());
+
     let i = b"23:32\r\n               -0330";
     let msg = parse_only(time, i);
     assert!(msg.is_ok());
@@ -249,6 +272,10 @@ pub fn date_time(i: Input<u8>) -> U8Result<DateTime<FixedOffset>> {
 
 #[test]
 fn test_date_time() {
+    let i = b"21 Nov 97 09:55:06 GMT";
+    let msg = parse_only(date_time, i);
+    assert!(msg.is_ok());
+
     let i = b"Thu,\r\n      13\r\n        Feb\r\n          1969\r\n 23:32\r\n               -0330 (Newfoundland Time)\r\n";
     let msg = parse_only(date_time, i);
     assert!(msg.is_ok());
