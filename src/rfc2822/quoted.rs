@@ -54,19 +54,43 @@ pub fn qcontent(i: Input<u8>) -> U8Result<u8> {
     }
 }
 
+#[test]
+fn test_qcontent() {
+    let i = b"G";
+    let msg = parse_only(qcontent, i);
+    assert!(msg.is_ok());
+    assert_eq!(msg.unwrap(), b'G');
+
+    let i = b"\\\"";
+    let msg = parse_only(qcontent, i);
+    assert!(msg.is_ok());
+    assert_eq!(msg.unwrap(), b'\"');
+}
+
 // quoted-string   =       [CFWS]
 //                         DQUOTE *([FWS] qcontent) [FWS] DQUOTE
 //                         [CFWS]
-// NOTE: in order to reduce allocations, this checks for runs of qcontent 
-// explicitly, so effectively
-// quoted-string = [CFWS] DQUOTE *([FWS] 1*(qcontent)) [FWS] DQUOTE [CFWS]
+// NOTE: in order to reduce allocations, this checks for runs of qtext 
+// explicitly, so expanding things out:
+// quoted-string = [CFWS] DQUOTE *([FWS] qcontent) [FWS] DQUOTE [CFWS]
+//
+// substitute qcontent:  
+//               = [CFWS] DQUOTE *([FWS] (qtext / quoted-pair)) [FWS] DQUOTE [CFWS]
+//
+// associate many
+//               = [CFWS] DQUOTE *([FWS] (1*qtext / quoted-pair)) [FWS] DQUOTE [CFWS]
+//
 pub fn quoted_string(i: Input<u8>) -> U8Result<Bytes> {
     option(i, cfws, Bytes::empty()).bind(|i, ws1| {
         dquote(i).then(|i| {
+
             let a = |i| {
                 option(i, fws, Bytes::empty()).bind(|i, ws2| {
-                    matched_by(i, |i| skip_many1(i, qcontent)).bind(|i, (v, _)| {
-                        i.ret(ws2.concat(&Bytes::from_slice(v)))
+                    or(i,
+                       |i| matched_by(i, |i| skip_many1(i, qtext)).map(|(v, _)| Bytes::from_slice(v)),
+                       |i| quoted_pair(i).map(|c| Bytes::from_slice(&[c][..])),
+                    ).bind(|i, cs| {
+                        i.ret(ws2.concat(&cs))
                     })
                 })
             };
@@ -84,6 +108,14 @@ pub fn quoted_string(i: Input<u8>) -> U8Result<Bytes> {
             })
         })
     })
+}
+
+#[test]
+fn test_quoted_string() {
+    let i = b"\"Giant; \\\"Big\\\" Box\"";
+    let msg = parse_only(quoted_string, i);
+    assert!(msg.is_ok());
+    assert_eq!(msg.unwrap(), Bytes::from_slice(b"Giant; \"Big\" Box"));
 }
 
 pub fn quoted_string_not<P>(i: Input<u8>, mut p: P) -> U8Result<Bytes> where

@@ -48,10 +48,37 @@ pub struct Message {
 }
 
 impl Message {
-    pub fn from<'a>(&'a self) -> Option<&'a AddressesField> {
+    pub fn date<'a>(&'a self) -> &'a DateTimeField {
+        self.fields.iter().filter_map(|i| {
+            match i {
+                &Field::Date(ref f) => Some(f),
+                _ => None,
+            }
+        }).next().unwrap()
+    }
+
+    pub fn from<'a>(&'a self) -> &'a AddressesField {
         self.fields.iter().filter_map(|i| {
             match i {
                 &Field::From(ref f) => Some(f),
+                _ => None,
+            }
+        }).next().unwrap()
+    }
+
+    pub fn sender<'a>(&'a self) -> Option<&'a AddressField> {
+        self.fields.iter().filter_map(|i| {
+            match i {
+                &Field::Sender(ref f) => Some(f),
+                _ => None,
+            }
+        }).next()
+    }
+
+    pub fn reply_to<'a>(&'a self) -> Option<&'a AddressesField> {
+        self.fields.iter().filter_map(|i| {
+            match i {
+                &Field::ReplyTo(ref f) => Some(f),
                 _ => None,
             }
         }).next()
@@ -66,19 +93,19 @@ impl Message {
         }).next()
     }
 
-    pub fn subject<'a>(&'a self) -> Option<&'a UnstructuredField> {
+    pub fn cc<'a>(&'a self) -> Option<&'a AddressesField> {
         self.fields.iter().filter_map(|i| {
             match i {
-                &Field::Subject(ref f) => Some(f),
+                &Field::Cc(ref f) => Some(f),
                 _ => None,
             }
         }).next()
     }
 
-    pub fn date<'a>(&'a self) -> Option<&'a DateTimeField> {
+    pub fn bcc<'a>(&'a self) -> Option<&'a AddressesField> {
         self.fields.iter().filter_map(|i| {
             match i {
-                &Field::Date(ref f) => Some(f),
+                &Field::Bcc(ref f) => Some(f),
                 _ => None,
             }
         }).next()
@@ -91,6 +118,60 @@ impl Message {
                 _ => None,
             }
         }).next()
+    }
+
+    pub fn references<'a>(&'a self) -> Option<&'a MessageIDsField> {
+        self.fields.iter().filter_map(|i| {
+            match i {
+                &Field::References(ref f) => Some(f),
+                _ => None,
+            }
+        }).next()
+    }
+
+    pub fn in_reply_to<'a>(&'a self) -> Option<&'a MessageIDsField> {
+        self.fields.iter().filter_map(|i| {
+            match i {
+                &Field::InReplyTo(ref f) => Some(f),
+                _ => None,
+            }
+        }).next()
+    }
+
+    pub fn subject<'a>(&'a self) -> Option<&'a UnstructuredField> {
+        self.fields.iter().filter_map(|i| {
+            match i {
+                &Field::Subject(ref f) => Some(f),
+                _ => None,
+            }
+        }).next()
+    }
+
+    pub fn comments<'a>(&'a self) -> Vec<&'a UnstructuredField> {
+        self.fields.iter().filter_map(|i| {
+            match i {
+                &Field::Comments(ref f) => Some(f),
+                _ => None,
+            }
+        }).collect()
+    }
+
+    pub fn keywords<'a>(&'a self) -> Vec<&'a KeywordsField> {
+        self.fields.iter().filter_map(|i| {
+            match i {
+                &Field::Keywords(ref f) => Some(f),
+                _ => None,
+            }
+        }).collect()
+    }
+
+    pub fn optional<'a>(&'a self) -> Vec<(&'a str, &'a UnstructuredField)> {
+        self.fields.iter().filter_map(|i| {
+            match i {
+                &Field::Optional(ref k, ref v) => Some((k.as_str(), v)),
+                _ => None,
+            }
+        }).collect()
     }
 }
 

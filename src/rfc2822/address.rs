@@ -297,6 +297,26 @@ pub fn name_addr(i: Input<u8>) -> U8Result<Address> {
 
 #[test]
 fn test_name_addr() {
+    let i = b"Who? <one@y.test>";
+    let msg = parse_only(name_addr, i);
+    assert!(msg.is_ok());
+    let a = Address::Mailbox{
+        local_part: "one".to_string(),
+        domain: "y.test".to_string(),
+        display_name: Some(Bytes::from_slice(b"Who? ")),
+    };
+    assert_eq!(msg.unwrap(), a);
+
+    let i = b"\"Giant; \\\"Big\\\" Box\" <sysservices@example.net>";
+    let msg = parse_only(name_addr, i);
+    assert!(msg.is_ok());
+    let a = Address::Mailbox{
+        local_part: "sysservices".to_string(),
+        domain: "example.net".to_string(),
+        display_name: Some(Bytes::from_slice(b"Giant; \"Big\" Box ")),
+    };
+    assert_eq!(msg.unwrap(), a);
+
     let i = b"Joe Q. Public <john.q.public@example.com>";
     let msg = parse_only(name_addr, i);
     assert!(msg.is_ok());

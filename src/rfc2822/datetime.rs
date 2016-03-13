@@ -3,6 +3,7 @@ use chrono::naive::time::NaiveTime;
 use chrono::naive::date::NaiveDate;
 use chrono::naive::datetime::NaiveDateTime;
 use chrono::datetime::DateTime;
+use chrono::offset::{TimeZone, LocalResult};
 use chrono::offset::fixed::FixedOffset;
 use bytes::Bytes;
 
@@ -116,7 +117,7 @@ pub fn date(i: Input<u8>) -> U8Result<NaiveDate> {
             year(i).bind(|i, y| {
                 println!("date.year.bind({:?}, {:?})", i, y);
 
-                i.ret(NaiveDate::from_ymd(y as i32, m as u32, d as u32))
+                i.ret(NaiveDate::from_ymd(y as i32, 1 + (m as u32), d as u32))
             })
         })
     })
@@ -175,21 +176,19 @@ pub fn time_of_day(i: Input<u8>) -> U8Result<NaiveTime> {
 
 // zone = (( "+" / "-" ) 4DIGIT) / obs-zone
 pub fn zone(i: Input<u8>) -> U8Result<FixedOffset> {
-    println!("zone({:?})", i);
-    
     let a = |i| {
         or(i, |i| token(i, b'+'), |i| token(i, b'-')).bind(|i, sign| {
-            println!("zone.or(+,-).bind(({:?}, {:?})", i, sign);
 
-            parse_digits(i, 4).bind(|i, offset| {
-                println!("zone.parse_digits(4).bind(({:?}, {:?})", i, offset);
+            parse_digits(i, 2).bind(|i, offset_h: i32| {
+                parse_digits(i, 2).bind(|i, offset_m: i32| {
+                    let offset = (offset_h * 3600) + (offset_m * 60);
+                    let zone = match sign {
+                        b'+' => FixedOffset::east(offset),
+                        _ => FixedOffset::west(offset),
+                    };
 
-                let zone = match sign {
-                    b'+' => FixedOffset::east(offset),
-                    _ => FixedOffset::west(offset),
-                };
-
-                i.ret(zone)
+                    i.ret(zone)
+                })
             })
         })
     };
@@ -223,6 +222,11 @@ pub fn time(i: Input<u8>) -> U8Result<(NaiveTime, FixedOffset)> {
 
 #[test]
 fn test_time() {
+    let i = b"09:55:06 -0600";
+    let msg = parse_only(time, i);
+    assert!(msg.is_ok());
+    assert_eq!(msg.unwrap(), (NaiveTime::from_hms(9,55,6), FixedOffset::west(6*3600)));
+
     let i = b"09:55:06 GMT";
     let msg = parse_only(time, i);
     assert!(msg.is_ok());
@@ -263,7 +267,12 @@ pub fn date_time(i: Input<u8>) -> U8Result<DateTime<FixedOffset>> {
                     option(i, cfws, Bytes::empty()).then(|i| {
                         println!("date_time.option(cfws).then({:?})", i);
 
-                        i.ret(DateTime::from_utc(NaiveDateTime::new(d, t.0), t.1))
+                        let ndt = NaiveDateTime::new(d, t.0);
+
+                        match t.1.from_local_datetime(&ndt) {
+                            LocalResult::Single(dt) => i.ret(dt),
+                            _ => i.err(Error::Unexpected),
+                        }
                     })
                 })
             })
@@ -273,9 +282,15 @@ pub fn date_time(i: Input<u8>) -> U8Result<DateTime<FixedOffset>> {
 
 #[test]
 fn test_date_time() {
+    let i = b"Fri, 21 Nov 1997 09:55:06 -0600";
+    let msg = parse_only(date_time, i);
+    assert!(msg.is_ok());
+    assert_eq!(msg.unwrap(), FixedOffset::east(-6*3600).ymd(1997, 11, 21).and_hms(9,55,6));
+
     let i = b"21 Nov 97 09:55:06 GMT";
     let msg = parse_only(date_time, i);
     assert!(msg.is_ok());
+    assert_eq!(msg.unwrap(), FixedOffset::west(0).ymd(1997, 11, 21).and_hms(9,55,6));
 
     let i = b"Thu,\r\n      13\r\n        Feb\r\n          1969\r\n 23:32\r\n               -0330 (Newfoundland Time)\r\n";
     let msg = parse_only(date_time, i);
