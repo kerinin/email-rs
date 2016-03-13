@@ -20,6 +20,7 @@ P: FnMut(u8) -> bool,
 }
 
 // phrase = 1*word / obs-phrase
+// NOTE: Checking obs-phrase first...
 pub fn phrase(i: Input<u8>) -> U8Result<Bytes> {
     let a = |i| {
         many1(i, word).map(|ws: Vec<Bytes>| {
@@ -29,7 +30,7 @@ pub fn phrase(i: Input<u8>) -> U8Result<Bytes> {
         })
     };
 
-    or(i, a, obs_phrase)
+    or(i, obs_phrase, a)
 }
 
 #[test]
@@ -37,6 +38,8 @@ fn test_phrase() {
     let i = b"Joe Q. Public";
     let msg = parse_only(phrase, i);
     assert!(msg.is_ok());
+    let v = msg.unwrap();
+    assert_eq!(v, Bytes::from_slice(b"Joe Q. Public"));
 }
 
 
@@ -57,18 +60,18 @@ pub fn utext(i: Input<u8>) -> U8Result<u8> {
 // unstructured = *([FWS] 1*utext) [FWS]
 pub fn unstructured(i: Input<u8>) -> U8Result<Bytes> {
     let a = |i| {
-        option(i, fws, ()).then(|i| {
+        option(i, fws, Bytes::empty()).bind(|i, ws1| {
             matched_by(i, |i| skip_many1(i, utext)).bind(|i, (v, _)| {
-                i.ret(Bytes::from_slice(v))
+                i.ret(ws1.concat(&Bytes::from_slice(v)))
             })
         })
     };
 
     many(i, a).bind(|i, rs: Vec<Bytes>| {
-        option(i, fws, ()).then(|i| {
+        option(i, fws, Bytes::empty()).bind(|i, ws1| {
             let bs = rs.into_iter().fold(Bytes::empty(), |acc, r| acc.concat(&r));
 
-            i.ret(bs)
+            i.ret(bs.concat(&ws1))
         })
     })
 }

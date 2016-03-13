@@ -15,13 +15,13 @@ pub mod obsolete;
 pub mod primitive;
 pub mod quoted;
 
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Day { Mon, Tue, Wed, Thu, Fri, Sat, Sun }
 
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Month { Jan, Feb, Mar, Apr, May, Jun, Jul, Aug, Sep, Oct, Nov, Dec }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Address {
     Mailbox {
         local_part: String,
@@ -34,33 +34,80 @@ pub enum Address {
     },
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct MessageID {
-    id_left: Bytes,
-    id_right: Bytes,
+    pub id_left: Bytes,
+    pub id_right: Bytes,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Message {
     pub traces: Vec<Trace>,
     pub fields: Vec<Field>,
     pub body: Bytes,
 }
 
-#[derive(Debug)]
+impl Message {
+    pub fn from<'a>(&'a self) -> Option<&'a AddressesField> {
+        self.fields.iter().filter_map(|i| {
+            match i {
+                &Field::From(ref f) => Some(f),
+                _ => None,
+            }
+        }).next()
+    }
+
+    pub fn to<'a>(&'a self) -> Option<&'a AddressesField> {
+        self.fields.iter().filter_map(|i| {
+            match i {
+                &Field::To(ref f) => Some(f),
+                _ => None,
+            }
+        }).next()
+    }
+
+    pub fn subject<'a>(&'a self) -> Option<&'a UnstructuredField> {
+        self.fields.iter().filter_map(|i| {
+            match i {
+                &Field::Subject(ref f) => Some(f),
+                _ => None,
+            }
+        }).next()
+    }
+
+    pub fn date<'a>(&'a self) -> Option<&'a DateTimeField> {
+        self.fields.iter().filter_map(|i| {
+            match i {
+                &Field::Date(ref f) => Some(f),
+                _ => None,
+            }
+        }).next()
+    }
+
+    pub fn message_id<'a>(&'a self) -> Option<&'a MessageIDField> {
+        self.fields.iter().filter_map(|i| {
+            match i {
+                &Field::MessageID(ref f) => Some(f),
+                _ => None,
+            }
+        }).next()
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub struct Trace {
     pub return_path: Option<Address>,
     pub received: Vec<ReceivedField>,
     pub fields: Vec<Resent>,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct ReceivedField {
     pub date_time: DateTime<FixedOffset>,
     pub data: Bytes,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Resent {
     Date(DateTimeField),
     From(AddressesField),
@@ -71,7 +118,7 @@ pub enum Resent {
     MessageID(MessageIDField),
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Field {
     Date(DateTimeField),
     From(AddressesField),
@@ -90,39 +137,39 @@ pub enum Field {
     Optional(String, UnstructuredField),
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct DateTimeField {
-    date_time: DateTime<FixedOffset>,
+    pub date_time: DateTime<FixedOffset>,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct AddressesField {
-    addresses: Vec<Address>,
+    pub addresses: Vec<Address>,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct AddressField {
-    address: Address,
+    pub address: Address,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct MessageIDField {
-    message_id: MessageID,
+    pub message_id: MessageID,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct MessageIDsField {
-    message_ids: Vec<MessageID>,
+    pub message_ids: Vec<MessageID>,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct UnstructuredField {
-    data: Bytes,
+    pub data: Bytes,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct KeywordsField {
-    keywords: Vec<Bytes>,
+    pub keywords: Vec<Bytes>,
 }
 
 impl Field {
@@ -169,7 +216,7 @@ impl Field {
     }
 }
 
-// #[derive(Debug)]
+// #[derive(Clone, Debug)]
 // pub enum ReceivedValue {
 //     Addresses(Vec<Address>),
 //     Address(Address),

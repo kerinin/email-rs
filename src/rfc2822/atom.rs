@@ -1,5 +1,5 @@
 use chomp::*;
-use bytes::Bytes;
+use bytes::{Bytes, ByteStr};
 
 use rfc2822::folding::*;
 
@@ -34,10 +34,11 @@ pub fn atext(i: Input<u8>) -> U8Result<u8> {
 
 // atom = [CFWS] 1*atext [CFWS]
 pub fn atom(i: Input<u8>) -> U8Result<Bytes> {
-    option(i, cfws, ()).then(|i| {
+    option(i, cfws, Bytes::empty()).bind(|i, ws1| {
         matched_by(i, |i| skip_many1(i, atext)).bind(|i, (v, _)| {
-            option(i, cfws, ()).then(|i| {
-                i.ret(Bytes::from_slice(v))
+            option(i, cfws, Bytes::empty()).bind(|i, ws2| {
+
+                i.ret(ws1.concat(&Bytes::from_slice(v)).concat(&ws2))
             })
         })
     })
@@ -58,12 +59,13 @@ pub fn dot_atom_text(i: Input<u8>) -> U8Result<Bytes> {
 
 // dot-atom = [CFWS] dot-atom-text [CFWS]
 pub fn dot_atom(i: Input<u8>) -> U8Result<Bytes> {
-    option(i, cfws, ()).then(|i| {
+    option(i, cfws, Bytes::empty()).bind(|i, ws1| {
         matched_by(i, |i| {
             skip_many1(i, dot_atom_text)
         }).bind(|i, (v, _)| {
-            option(i, cfws, ()).then(|i| {
-                i.ret(Bytes::from_slice(v))
+            option(i, cfws, Bytes::empty()).bind(|i, ws2| {
+
+                i.ret(ws1.concat(&Bytes::from_slice(v)).concat(&ws2))
             })
         })
     })

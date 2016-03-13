@@ -4,6 +4,7 @@ use chrono::naive::date::NaiveDate;
 use chrono::naive::datetime::NaiveDateTime;
 use chrono::datetime::DateTime;
 use chrono::offset::fixed::FixedOffset;
+use bytes::Bytes;
 
 use util::*;
 use rfc2822::*;
@@ -27,7 +28,7 @@ pub fn day_of_week(i: Input<u8>) -> U8Result<Day> {
     parse!{i;
         or(
             |i| { parse!{i;
-                option(fws, ());
+                option(fws, Bytes::empty());
                 day_name()
             }},
             obs_day_of_week,
@@ -40,7 +41,7 @@ pub fn day(i: Input<u8>) -> U8Result<usize> {
     println!("day({:?})", i);
     let a = |i| {
         println!("day.a({:?})", i);
-        option(i, fws, ()).then(|i| {
+        option(i, fws, Bytes::empty()).then(|i| {
             println!("day.option(fws).then({:?})", i);
             parse_digits(i, (1..3))
         })
@@ -259,7 +260,7 @@ pub fn date_time(i: Input<u8>) -> U8Result<DateTime<FixedOffset>> {
                 time(i).bind(|i, t| {
                     println!("date_time.time.bind({:?}, {:?})", i, t);
 
-                    option(i, cfws, ()).then(|i| {
+                    option(i, cfws, Bytes::empty()).then(|i| {
                         println!("date_time.option(cfws).then({:?})", i);
 
                         i.ret(DateTime::from_utc(NaiveDateTime::new(d, t.0), t.1))

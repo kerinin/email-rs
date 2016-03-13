@@ -228,13 +228,13 @@ pub fn id_right(i: Input<u8>) -> U8Result<Bytes> {
 // msg-id          =       [CFWS] "<" id-left "@" id-right ">" [CFWS]
 pub fn msg_id(i: Input<u8>) -> U8Result<MessageID> {
     parse!{i;
-        option(cfws, ());
+        option(cfws, Bytes::empty());
         token(b'<');
         let l = id_left();
         token(b'@');
         let r = id_right();
         token(b'>');
-        option(cfws, ());
+        option(cfws, Bytes::empty());
 
         ret MessageID{id_left: l, id_right: r}
     }
@@ -425,12 +425,12 @@ pub fn resent_msg_id(i: Input<u8>) -> U8Result<Resent> {
 // real-path       =       [CFWS] "<" [CFWS] addr-spec ">" [CFWS]
 pub fn path(i: Input<u8>) -> U8Result<Address> {
     parse!{i; 
-        option(cfws, ());
+        option(cfws, Bytes::empty());
         token(b'<');
-        option(cfws, ());
+        option(cfws, Bytes::empty());
         let a = addr_spec();
         token(b'>');
-        option(cfws, ());
+        option(cfws, Bytes::empty());
 
         ret a
     }

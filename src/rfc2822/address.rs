@@ -86,22 +86,28 @@ pub fn dcontent(i: Input<u8>) -> U8Result<u8> {
 // NOTE: accepting runs of dcontent to reduce allocations, so effectively:
 // domain-literal = [CFWS] "[" *([FWS] 1*dcontent) [FWS] "]" [CFWS]
 pub fn domain_literal(i: Input<u8>) -> U8Result<Bytes> {
-    option(i, cfws, ()).then(|i| {
+    option(i, cfws, Bytes::empty()).bind(|i, ws1| {
+
         token(i, b'[').then(|i| {
             let a = |i| {
-                option(i, fws, ()).then(|i| {
+                option(i, fws, Bytes::empty()).bind(|i, ws2| {
                     matched_by(i, |i| skip_many1(i, dcontent)).bind(|i, (v, _)| {
-                        i.ret(Bytes::from_slice(v))
+
+                        i.ret(ws2.concat(&Bytes::from_slice(v)))
                     })
                 })
             };
 
             many(i, a).bind(|i, dcs: Vec<Bytes>| {
-                option(i, fws, ()).then(|i| {
+
+                option(i, fws, Bytes::empty()).bind(|i, ws3| {
+                    
                     token(i, b']').then(|i| {
-                        option(i, cfws, ()).then(|i| {
-                            let bs = dcs.into_iter().fold(Bytes::empty(), |acc, b| acc.concat(&b));
-                            i.ret(bs)
+                        
+                        option(i, cfws, Bytes::empty()).bind(|i, ws4| {
+                            let bs = dcs.into_iter().fold(ws1.concat(&Bytes::from_slice(b"[")), |acc, b| acc.concat(&b));
+
+                            i.ret(bs.concat(&ws3).concat(&Bytes::from_slice(b"]")).concat(&ws4))
                         })
                     })
                 })
@@ -189,11 +195,11 @@ fn test_addr_spec() {
 // NOTE: Omitting `obs-angle-addr` becasue there be dragons - this is technically
 // a legal email: <@foo.com@bar.com,@baz.con:me@example.com>
 pub fn angle_addr(i: Input<u8>) -> U8Result<Address> {
-    option(i, cfws, ()).then(|i| {
+    option(i, cfws, Bytes::empty()).then(|i| {
         token(i, b'<').then(|i| {
             addr_spec(i).bind(|i, a| {
                 token(i, b'>').then(|i| {
-                    option(i, cfws, ()).then(|i| {
+                    option(i, cfws, Bytes::empty()).then(|i| {
                         i.ret(a)
                     })
                 })
@@ -384,7 +390,7 @@ pub fn group(i: Input<u8>) -> U8Result<Address> {
                 token(i, b';').then(|i| {
                     println!("group.token(;)");
 
-                    option(i, cfws, ()).then(|i| {
+                    option(i, cfws, Bytes::empty()).then(|i| {
                         println!("group.option(cfws)");
 
                         let g = Address::Group{

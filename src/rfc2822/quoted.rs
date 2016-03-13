@@ -48,23 +48,23 @@ pub fn qcontent(i: Input<u8>) -> U8Result<u8> {
 // explicitly, so effectively
 // quoted-string = [CFWS] DQUOTE *([FWS] 1*(qcontent)) [FWS] DQUOTE [CFWS]
 pub fn quoted_string(i: Input<u8>) -> U8Result<Bytes> {
-    option(i, cfws, ()).then(|i| {
+    option(i, cfws, Bytes::empty()).bind(|i, ws1| {
         dquote(i).then(|i| {
             let a = |i| {
-                option(i, fws, ()).then(|i| {
+                option(i, fws, Bytes::empty()).bind(|i, ws2| {
                     matched_by(i, |i| skip_many1(i, qcontent)).bind(|i, (v, _)| {
-                        i.ret(Bytes::from_slice(v))
+                        i.ret(ws2.concat(&Bytes::from_slice(v)))
                     })
                 })
             };
 
             many(i, a).bind(|i, rs: Vec<Bytes>| {
-                option(i, fws, ()).then(|i| {
+                option(i, fws, Bytes::empty()).bind(|i, ws3| {
                     dquote(i).then(|i| {
-                        option(i, cfws, ()).then(|i| {
-                            let bs = rs.into_iter().fold(Bytes::empty(), |acc, r| acc.concat(&r));
+                        option(i, cfws, Bytes::empty()).bind(|i, ws4| {
+                            let bs = rs.into_iter().fold(ws1, |acc, r| acc.concat(&r));
 
-                            i.ret(bs)
+                            i.ret(bs.concat(&ws3).concat(&ws4))
                         })
                     })
                 })
@@ -76,24 +76,31 @@ pub fn quoted_string(i: Input<u8>) -> U8Result<Bytes> {
 pub fn quoted_string_not<P>(i: Input<u8>, mut p: P) -> U8Result<Bytes> where
 P: FnMut(u8) -> bool,
 {
-    option(i, cfws, ()).then(|i| {
+    option(i, cfws, Bytes::empty()).bind(|i, ws1| {
         dquote(i).then(|i| {
             many1(i, |i| {
-                option(i, fws, ()).then(|i| {
-                    peek_next(i).bind(|i, next| {
-                        if p(next) {
-                            i.err(Error::Unexpected)
-                        } else {
-                            qcontent(i).bind(|i, c| {
-                                i.ret(c)
-                            })
-                        }
+                option(i, fws, Bytes::empty()).bind(|i, ws2| {
+                    matched_by(i, |i| {
+                        peek_next(i).bind(|i, next| {
+                            if p(next) {
+                                i.err(Error::Unexpected)
+                            } else {
+                                qcontent(i)
+                            }
+                        })
+
+                    }).bind(|i, (v, _)| {
+                        i.ret(ws2.concat(&Bytes::from_slice(v)))
                     })
                 })
-            }).bind(|i, cs: Vec<u8>| {
-                option(i, fws, ()).then(|i| {
+            }).bind(|i, rs: Vec<Bytes>| {
+                option(i, fws, Bytes::empty()).bind(|i, ws3| {
                     dquote(i).then(|i| {
-                        i.ret(Bytes::from_slice(&cs[..]))
+                        option(i, cfws, Bytes::empty()).bind(|i, ws4| {
+                            let bs = rs.into_iter().fold(ws1, |acc, r| acc.concat(&r));
+
+                            i.ret(bs.concat(&ws3).concat(&ws4))
+                        })
                     })
                 })
             })

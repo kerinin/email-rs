@@ -51,15 +51,21 @@ pub fn obs_qp(i: Input<u8>) -> U8Result<u8> {
 }
 
 // obs-FWS = 1*WSP *(CRLF 1*WSP)
-// Consumes matches & returns ()
-pub fn obs_fws(i: Input<u8>) -> U8Result<()> {
-    parse!{i;
-        skip_many1(wsp);
-        skip_many(|i| parse!{i;
-            crlf();
-            skip_many1(wsp);
+pub fn obs_fws(i: Input<u8>) -> U8Result<Bytes> {
+    matched_by(i, |i| skip_many1(i, wsp)).bind(|i, (pre, _)| {
+        many(i, |i| {
+            crlf(i).then(|i| {
+                matched_by(i, |i| skip_many1(i, wsp)).bind(|i, (post, _)| {
+                    i.ret(Bytes::from_slice(post))
+                })
+            })
+
+        }).bind(|i, post: Vec<Bytes>| {
+            let bs = post.into_iter().fold(Bytes::from_slice(pre), |acc, b| acc.concat(&b));
+
+            i.ret(bs)
         })
-    }
+    })
 }
 
 // obs-phrase = word *(word / "." / CFWS)
@@ -116,9 +122,9 @@ fn test_obs_phrase() {
 // obs-day-of-week = [CFWS] day-name [CFWS]
 pub fn obs_day_of_week(i: Input<u8>) -> U8Result<Day> {
     parse!{i;
-        option(cfws, ());
+        option(cfws, Bytes::empty());
         let d = day_name();
-        option(cfws, ());
+        option(cfws, Bytes::empty());
 
         ret d
     }
@@ -127,9 +133,9 @@ pub fn obs_day_of_week(i: Input<u8>) -> U8Result<Day> {
 // obs-day = [CFWS] 1*2DIGIT [CFWS]
 pub fn obs_day(i: Input<u8>) -> U8Result<usize> {
     parse!{i;
-        option(cfws, ());
+        option(cfws, Bytes::empty());
         let n = parse_digits((1..3));
-        option(cfws, ());
+        option(cfws, Bytes::empty());
 
         ret n
     }
@@ -138,9 +144,9 @@ pub fn obs_day(i: Input<u8>) -> U8Result<usize> {
 // obs-month = CFWS month-name CFWS
 pub fn obs_month(i: Input<u8>) -> U8Result<Month> {
     parse!{i;
-        option(cfws, ());
+        option(cfws, Bytes::empty());
         let m = month_name();
-        option(cfws, ());
+        option(cfws, Bytes::empty());
 
         ret m
     }
@@ -152,7 +158,7 @@ pub fn obs_month(i: Input<u8>) -> U8Result<Month> {
 // because it prevents FWS from ever matching.  So I'm dropping it - effective:
 // obs-year = [CFWS] 2*DIGIT
 pub fn obs_year(i: Input<u8>) -> U8Result<usize> {
-    option(i, cfws, ()).then(|i| {
+    option(i, cfws, Bytes::empty()).then(|i| {
         parse_digits(i, (2..4)).bind(|i, y: usize| {
             let actual_year = if y < 49 {
                 y + 2000
@@ -167,9 +173,9 @@ pub fn obs_year(i: Input<u8>) -> U8Result<usize> {
 // obs-hour = [CFWS] 2DIGIT [CFWS]
 pub fn obs_hour(i: Input<u8>) -> U8Result<usize> {
     parse!{i;
-        option(cfws, ());
+        option(cfws, Bytes::empty());
         let n = parse_digits(2);
-        option(cfws, ());
+        option(cfws, Bytes::empty());
 
         ret n
     }
@@ -178,9 +184,9 @@ pub fn obs_hour(i: Input<u8>) -> U8Result<usize> {
 // obs-minute = [CFWS] 2DIGIT [CFWS]
 pub fn obs_minute(i: Input<u8>) -> U8Result<usize> {
     parse!{i;
-        option(cfws, ());
+        option(cfws, Bytes::empty());
         let n = parse_digits(2);
-        option(cfws, ());
+        option(cfws, Bytes::empty());
 
         ret n
     }
@@ -189,9 +195,9 @@ pub fn obs_minute(i: Input<u8>) -> U8Result<usize> {
 // obs-second = [CFWS] 2DIGIT [CFWS]
 pub fn obs_second(i: Input<u8>) -> U8Result<usize> {
     parse!{i;
-        option(cfws, ());
+        option(cfws, Bytes::empty());
         let n = parse_digits(2);
-        option(cfws, ());
+        option(cfws, Bytes::empty());
 
         ret n
     }
@@ -279,9 +285,9 @@ pub fn obs_mbox_list(i: Input<u8>) -> U8Result<Vec<Address>> {
     let r = parse!{i;
         let an:Vec<Option<Address>> = many1(|i| { parse!{i;
             let m: Option<Address> = option(|i| mailbox(i).map(|i| Some(i)), None);
-            option(cfws, ());
+            option(cfws, Bytes::empty());
             token(b',');
-            option(cfws, ());
+            option(cfws, Bytes::empty());
 
             ret m
         }});
@@ -302,9 +308,9 @@ pub fn obs_addr_list(i: Input<u8>) -> U8Result<Vec<Address>> {
     let r = parse!{i;
         let an:Vec<Option<Address>> = many1(|i| { parse!{i;
             let m: Option<Address> = option(|i| address(i).map(|i| Some(i)), None);
-            option(cfws, ());
+            option(cfws, Bytes::empty());
             token(b',');
-            option(cfws, ());
+            option(cfws, Bytes::empty());
 
             ret m
         }});
