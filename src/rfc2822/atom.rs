@@ -1,4 +1,5 @@
 use chomp::*;
+use bytes::Bytes;
 
 use rfc2822::folding::*;
 
@@ -32,20 +33,18 @@ pub fn atext(i: Input<u8>) -> U8Result<u8> {
 }
 
 // atom = [CFWS] 1*atext [CFWS]
-pub fn atom(i: Input<u8>) -> U8Result<&[u8]> {
-    parse!{i;
-        option(cfws, ());
-        let a = matched_by(|i| {
-            skip_many1(i, atext)
-        });
-        option(cfws, ());
-
-        ret a.0
-    }
+pub fn atom(i: Input<u8>) -> U8Result<Bytes> {
+    option(i, cfws, ()).then(|i| {
+        matched_by(i, |i| skip_many1(i, atext)).bind(|i, (v, _)| {
+            option(i, cfws, ()).then(|i| {
+                i.ret(Bytes::from_slice(v))
+            })
+        })
+    })
 }
 
 // dot-atom-text = 1*atext *("." 1*atext)
-pub fn dot_atom_text(i: Input<u8>) -> U8Result<&[u8]> {
+pub fn dot_atom_text(i: Input<u8>) -> U8Result<Bytes> {
     matched_by(i, |i| {
         skip_many1(i, atext).then(|i| {
             skip_many(i, |i| {
@@ -54,17 +53,17 @@ pub fn dot_atom_text(i: Input<u8>) -> U8Result<&[u8]> {
                 })
             })
         })
-    }).map(|(v, _)| v)
+    }).map(|(v, _)| Bytes::from_slice(v))
 }
 
 // dot-atom = [CFWS] dot-atom-text [CFWS]
-pub fn dot_atom(i: Input<u8>) -> U8Result<&[u8]> {
+pub fn dot_atom(i: Input<u8>) -> U8Result<Bytes> {
     option(i, cfws, ()).then(|i| {
         matched_by(i, |i| {
             skip_many1(i, dot_atom_text)
-        }).bind(|i, a| {
+        }).bind(|i, (v, _)| {
             option(i, cfws, ()).then(|i| {
-                i.ret(a.0)
+                i.ret(Bytes::from_slice(v))
             })
         })
     })

@@ -1,4 +1,6 @@
 //! RFC2822 specifies message bodies (supercedes RFC822)
+
+use bytes::Bytes;
 use chrono::datetime::DateTime;
 use chrono::offset::fixed::FixedOffset;
 
@@ -24,25 +26,25 @@ pub enum Address {
     Mailbox {
         local_part: String,
         domain: String,
-        display_name: Option<Vec<u8>>,
+        display_name: Option<Bytes>,
     },
     Group {
-        display_name: String,
+        display_name: Bytes,
         mailboxes: Vec<Address>,
     },
 }
 
 #[derive(Debug)]
 pub struct MessageID {
-    id_left: Vec<u8>,
-    id_right: Vec<u8>,
+    id_left: Bytes,
+    id_right: Bytes,
 }
 
 #[derive(Debug)]
 pub struct Message {
     pub traces: Vec<Trace>,
     pub fields: Vec<Field>,
-    pub body: Vec<u8>,
+    pub body: Bytes,
 }
 
 #[derive(Debug)]
@@ -55,7 +57,7 @@ pub struct Trace {
 #[derive(Debug)]
 pub struct ReceivedField {
     pub date_time: DateTime<FixedOffset>,
-    pub data: Vec<u8>,
+    pub data: Bytes,
 }
 
 #[derive(Debug)]
@@ -105,6 +107,7 @@ pub struct AddressField {
 
 #[derive(Debug)]
 pub struct MessageIDField {
+    message_id: MessageID,
 }
 
 #[derive(Debug)]
@@ -114,12 +117,12 @@ pub struct MessageIDsField {
 
 #[derive(Debug)]
 pub struct UnstructuredField {
-    data: Vec<u8>,
+    data: Bytes,
 }
 
 #[derive(Debug)]
 pub struct KeywordsField {
-    keywords: Vec<Vec<u8>>,
+    keywords: Vec<Bytes>,
 }
 
 impl Field {
@@ -170,8 +173,8 @@ impl Field {
 // pub enum ReceivedValue {
 //     Addresses(Vec<Address>),
 //     Address(Address),
-//     Domain(Vec<u8>),
-//     MessageID(Vec<u8>),
-//     Text(Vec<u8>),
+//     Domain(Bytes),
+//     MessageID(Bytes),
+//     Text(Bytes),
 // }
 

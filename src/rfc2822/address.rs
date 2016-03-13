@@ -1,6 +1,8 @@
-use std::iter::FromIterator;
+use std::str;
 
+use bytes::{Bytes, ByteStr};
 use chomp::*;
+
 use rfc2822::*;
 use rfc2822::atom::*;
 use rfc2822::folding::*;
@@ -10,7 +12,7 @@ use rfc2822::primitive::*;
 use rfc2822::quoted::*;
 
 // display-name = phrase
-pub fn display_name(i: Input<u8>) -> U8Result<Vec<u8>> {
+pub fn display_name(i: Input<u8>) -> U8Result<Bytes> {
     phrase(i)
 }
 
@@ -36,13 +38,9 @@ fn test_display_name() {
 // local-part = dot-atom / quoted-string / obs-local-part
 // NOTE: `quoted-string` includes `@` (as does obs-local-part, since it includes
 // `quoted-string`)
-pub fn local_part(i: Input<u8>) -> U8Result<Vec<u8>> {
-    println!("local_part({:?})", i);
+pub fn local_part(i: Input<u8>) -> U8Result<Bytes> {
     let a = |i| {
-        dot_atom(i).bind(|i, v| {
-            println!("local_part.dot_atom.bind({:?}, {:?})", i, v);
-            i.ret(FromIterator::from_iter(v.iter().map(|i| i.clone())))
-        })
+        dot_atom(i)
     };
 
     let b = |i| {
@@ -50,10 +48,7 @@ pub fn local_part(i: Input<u8>) -> U8Result<Vec<u8>> {
     };
 
     let c = |i| {
-        obs_local_part(i).bind(|i, v| {
-            println!("local_part.obs_local_part.bind({:?}, {:?})", i, v);
-            i.ret(FromIterator::from_iter(v.iter().map(|i| i.clone())))
-        })
+        obs_local_part(i)
     };
 
     or(i, a, |i| or(i, b, c))
@@ -88,20 +83,31 @@ pub fn dcontent(i: Input<u8>) -> U8Result<u8> {
 }
 
 // domain-literal = [CFWS] "[" *([FWS] dcontent) [FWS] "]" [CFWS]
-pub fn domain_literal(i: Input<u8>) -> U8Result<Vec<u8>> {
-    parse!{i;
-        option(cfws, ());
-        token(b'[');
-        let cs = many(|i| { parse!{i;
-            option(fws, ());
-            dcontent()
-        }});
-        option(fws, ());
-        token(b']');
-        option(cfws, ());
+// NOTE: accepting runs of dcontent to reduce allocations, so effectively:
+// domain-literal = [CFWS] "[" *([FWS] 1*dcontent) [FWS] "]" [CFWS]
+pub fn domain_literal(i: Input<u8>) -> U8Result<Bytes> {
+    option(i, cfws, ()).then(|i| {
+        token(i, b'[').then(|i| {
+            let a = |i| {
+                option(i, fws, ()).then(|i| {
+                    matched_by(i, |i| skip_many1(i, dcontent)).bind(|i, (v, _)| {
+                        i.ret(Bytes::from_slice(v))
+                    })
+                })
+            };
 
-        ret cs
-    }
+            many(i, a).bind(|i, dcs: Vec<Bytes>| {
+                option(i, fws, ()).then(|i| {
+                    token(i, b']').then(|i| {
+                        option(i, cfws, ()).then(|i| {
+                            let bs = dcs.into_iter().fold(Bytes::empty(), |acc, b| acc.concat(&b));
+                            i.ret(bs)
+                        })
+                    })
+                })
+            })
+        })
+    })
 }
 
 // domain = dot-atom / domain-literal / obs-domain
@@ -120,34 +126,9 @@ pub fn domain_literal(i: Input<u8>) -> U8Result<Vec<u8>> {
 //
 // domain = obs-domain / dot-atom / domain-literal
 //
-pub fn domain(i: Input<u8>) -> U8Result<Vec<u8>> {
-    println!("domain({:?})", i);
-
-    let a = |i| {
-        dot_atom(i).bind(|i, v| {
-            println!("domain.dot_atom.bind({:?}, {:?})", i, v);
-
-            i.ret(FromIterator::from_iter(v.iter().map(|i| i.clone())))
-        })
-    };
-
-    let b = |i| {
-        domain_literal(i).bind(|i, v| {
-            println!("domain.domain_literal.bind({:?}, {:?})", i, v);
-            
-            i.ret(v)
-        })
-    };
-
-    let c = |i| {
-        obs_domain(i).bind(|i, v| {
-            println!("domain.obs_domain.bind({:?}, {:?})", i, v);
-
-            i.ret(FromIterator::from_iter(v.iter().map(|i| i.clone())))
-        })
-    };
-
-    or(i, c, |i| or(i, a, b))
+pub fn domain(i: Input<u8>) -> U8Result<Bytes> {
+    // or(i, dot_atom, |i| or(i, domain_literal, obs_domain))
+    or(i, obs_domain, |i| or(i, dot_atom, domain_literal))
 }
 
 #[test]
@@ -176,8 +157,8 @@ pub fn addr_spec(i: Input<u8>) -> U8Result<Address> {
                 println!("addr_spec.domain.bind({:?})", d);
 
                 i.ret( Address::Mailbox{
-                    local_part: String::from_utf8(l).unwrap(), 
-                    domain: String::from_utf8(d).unwrap(),
+                    local_part: str::from_utf8(l.buf().bytes()).unwrap().to_string(), 
+                    domain: str::from_utf8(d.buf().bytes()).unwrap().to_string(),
                     display_name: None,
                 })
             })
@@ -190,6 +171,10 @@ fn test_addr_spec() {
     // let i = b"@machine.tld:mary@example.net";
     // let msg = parse_only(addr_spec, i);
     // assert!(msg.is_ok());
+
+    let i = b"jdoe@machine(comment).  example";
+    let msg = parse_only(addr_spec, i);
+    assert!(msg.is_ok());
 
     let i = b"pete(his account)@silly.test(his host)";
     let msg = parse_only(addr_spec, i);
@@ -219,6 +204,10 @@ pub fn angle_addr(i: Input<u8>) -> U8Result<Address> {
 
 #[test]
 fn test_angle_addr() {
+    let i = b"<jdoe@machine(comment).  example>";
+    let msg = parse_only(angle_addr, i);
+    assert!(msg.is_ok());
+
     let i = b"<pete(his account)@silly.test(his host)>";
     let msg = parse_only(angle_addr, i);
     assert!(msg.is_ok());
@@ -400,7 +389,7 @@ pub fn group(i: Input<u8>) -> U8Result<Address> {
 
                         let g = Address::Group{
                             // NOTE: Encoding?
-                            display_name: String::from_utf8(n).unwrap(),
+                            display_name: n,
                             mailboxes: ms,
                         };
 

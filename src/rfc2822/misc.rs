@@ -1,4 +1,5 @@
 use chomp::*;
+use bytes::{Bytes, ByteStr};
 
 use rfc2822::atom::*;
 use rfc2822::folding::*;
@@ -7,43 +8,24 @@ use rfc2822::primitive::*;
 use rfc2822::quoted::*;
 
 // word = atom / quoted-string
-pub fn word(i: Input<u8>) -> U8Result<Vec<u8>> {
-    println!("word({:?})", i);
-    or(i,
-       |i| {
-           atom(i).map(|i| {
-               println!("word.atom.map({:?})", i);
-               let mut v = Vec::with_capacity(i.len());
-               v.extend(i);
-               v
-           })
-       },
-       quoted_string,
-       )
+pub fn word(i: Input<u8>) -> U8Result<Bytes> {
+    // println!("word({:?})", i);
+    or(i, atom, quoted_string)
 }
 
-pub fn word_not<P>(i: Input<u8>, p: P) -> U8Result<Vec<u8>> where
+pub fn word_not<P>(i: Input<u8>, p: P) -> U8Result<Bytes> where
 P: FnMut(u8) -> bool,
 {
-    or(i,
-       |i| {
-           atom(i).map(|i| {
-               let mut v = Vec::with_capacity(i.len());
-               v.extend(i);
-               v
-           })
-       },
-       |i| quoted_string_not(i, p),
-       )
+    or(i, atom, |i| quoted_string_not(i, p))
 }
 
 // phrase = 1*word / obs-phrase
-pub fn phrase(i: Input<u8>) -> U8Result<Vec<u8>> {
+pub fn phrase(i: Input<u8>) -> U8Result<Bytes> {
     let a = |i| {
-        many1(i, word).map(|ws: Vec<Vec<u8>>| {
+        many1(i, word).map(|ws: Vec<Bytes>| {
             println!("phrase.many1(word).map({:?})", ws);
 
-            ws.into_iter().flat_map(|i| i).collect()
+            ws.into_iter().fold(Bytes::empty(), |acc, r| acc.concat(&r))
         })
     };
 
@@ -71,14 +53,22 @@ pub fn utext(i: Input<u8>) -> U8Result<u8> {
 }
 
 // unstructured = *([FWS] utext) [FWS]
-pub fn unstructured(i: Input<u8>) -> U8Result<Vec<u8>> {
-    parse!{i;
-        let t = many(|i| { parse!{i;
-            option(fws, ());
-            utext()
-        }});
-        option(fws, ());
+// NOTE: allowing runs of utext to reduce allocations, so effectively
+// unstructured = *([FWS] 1*utext) [FWS]
+pub fn unstructured(i: Input<u8>) -> U8Result<Bytes> {
+    let a = |i| {
+        option(i, fws, ()).then(|i| {
+            matched_by(i, |i| skip_many1(i, utext)).bind(|i, (v, _)| {
+                i.ret(Bytes::from_slice(v))
+            })
+        })
+    };
 
-        ret t
-    }
+    many(i, a).bind(|i, rs: Vec<Bytes>| {
+        option(i, fws, ()).then(|i| {
+            let bs = rs.into_iter().fold(Bytes::empty(), |acc, r| acc.concat(&r));
+
+            i.ret(bs)
+        })
+    })
 }

@@ -1,5 +1,4 @@
-use std::iter::FromIterator;
-
+use bytes::{Bytes, ByteStr};
 use chomp::*;
 
 use rfc2822::folding::*;
@@ -45,19 +44,36 @@ pub fn qcontent(i: Input<u8>) -> U8Result<u8> {
 // quoted-string   =       [CFWS]
 //                         DQUOTE *([FWS] qcontent) [FWS] DQUOTE
 //                         [CFWS]
-pub fn quoted_string(i: Input<u8>) -> U8Result<Vec<u8>> {
-    parse!{i;
-        option(cfws, ());
-        dquote();
-        let c = many(|i| parse!{i; option(fws, ()) >> qcontent()});
-        option(fws, ());
-        dquote();
+// NOTE: in order to reduce allocations, this checks for runs of qcontent 
+// explicitly, so effectively
+// quoted-string = [CFWS] DQUOTE *([FWS] 1*(qcontent)) [FWS] DQUOTE [CFWS]
+pub fn quoted_string(i: Input<u8>) -> U8Result<Bytes> {
+    option(i, cfws, ()).then(|i| {
+        dquote(i).then(|i| {
+            let a = |i| {
+                option(i, fws, ()).then(|i| {
+                    matched_by(i, |i| skip_many1(i, qcontent)).bind(|i, (v, _)| {
+                        i.ret(Bytes::from_slice(v))
+                    })
+                })
+            };
 
-        ret c
-    }
+            many(i, a).bind(|i, rs: Vec<Bytes>| {
+                option(i, fws, ()).then(|i| {
+                    dquote(i).then(|i| {
+                        option(i, cfws, ()).then(|i| {
+                            let bs = rs.into_iter().fold(Bytes::empty(), |acc, r| acc.concat(&r));
+
+                            i.ret(bs)
+                        })
+                    })
+                })
+            })
+        })
+    })
 }
 
-pub fn quoted_string_not<P>(i: Input<u8>, mut p: P) -> U8Result<Vec<u8>> where
+pub fn quoted_string_not<P>(i: Input<u8>, mut p: P) -> U8Result<Bytes> where
 P: FnMut(u8) -> bool,
 {
     option(i, cfws, ()).then(|i| {
@@ -74,10 +90,10 @@ P: FnMut(u8) -> bool,
                         }
                     })
                 })
-            }).bind(|i, cs| {
+            }).bind(|i, cs: Vec<u8>| {
                 option(i, fws, ()).then(|i| {
                     dquote(i).then(|i| {
-                        i.ret(cs)
+                        i.ret(Bytes::from_slice(&cs[..]))
                     })
                 })
             })
@@ -90,9 +106,9 @@ P: FnMut(u8) -> bool,
 fn test_quoted_string_not() {
     let i = b"\"jdoe\"";
     let msg = parse_only(|i| quoted_string_not(i, |c| c == b'@'), i);
-    assert_eq!(msg, Ok(FromIterator::from_iter("jdoe".bytes())));
+    assert_eq!(msg, Ok(Bytes::from_slice(b"jdoe")));
 
     let i = b"\"jdoe\"@example.com";
     let msg = parse_only(|i| quoted_string_not(i, |c| c == b'@'), i);
-    assert_eq!(msg, Ok(FromIterator::from_iter("jdoe".bytes())));
+    assert_eq!(msg, Ok(Bytes::from_slice(b"jdoe")));
 }

@@ -1,12 +1,13 @@
 use chomp::*;
+use bytes::Bytes;
 
 use rfc2822::*;
 use rfc2822::fields::*;
 use rfc2822::primitive::*;
 
 // body            =       *(*998text CRLF) *998text
-pub fn body(i: Input<u8>) -> U8Result<Vec<u8>> {
-    many(i, text)
+pub fn body(i: Input<u8>) -> U8Result<Bytes> {
+    matched_by(i, |i| skip_many(i, text)).map(|(v, _)| Bytes::from_slice(v))
 }
 
 // message         =       (fields / obs-fields)

@@ -80,12 +80,12 @@ fn fws_comment(i: Input<u8>) -> U8Result<()> {
 // CFWS = 1*([FWS] comment) [FWS] / (*([FWS] comment) FWS)
 //
 pub fn cfws(i: Input<u8>) -> U8Result<()> {
-    println!("cfws({:?})", i);
+    // println!("cfws({:?})", i);
 
     let repeat = |i| {
         many1(i, fws_comment).map(|_: Vec<()>| ()).then(|i| {
             option(i, fws, ()).then(|i| {
-                println!("cfws.repeat");
+                // println!("cfws.repeat");
 
                 i.ret(())
             })
@@ -94,13 +94,13 @@ pub fn cfws(i: Input<u8>) -> U8Result<()> {
 
     let fws_term = |i| {
         many(i, fws_comment).map(|_: Vec<()>| ()).then(|i| {
-            println!("cfws.fws_term");
+            // println!("cfws.fws_term");
             fws(i)
         })
     };
 
     or(i, repeat, fws_term).then(|i| {
-        println!("-> cfws.or(repeat, fws_term).then({:?})", i);
+        // println!("-> cfws.or(repeat, fws_term).then({:?})", i);
         i.ret(())
     })
 }

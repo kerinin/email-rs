@@ -1,6 +1,7 @@
 use chomp::*;
 use chomp::combinators::bounded;
 use chrono::offset::fixed::FixedOffset;
+use bytes::{Bytes, ByteStr};
 
 use util::*;
 use rfc2822::*;
@@ -63,28 +64,28 @@ pub fn obs_fws(i: Input<u8>) -> U8Result<()> {
 
 // obs-phrase = word *(word / "." / CFWS)
 // TODO: Figure out how this gets stuck...
-pub fn obs_phrase(i: Input<u8>) -> U8Result<Vec<u8>> {
+pub fn obs_phrase(i: Input<u8>) -> U8Result<Bytes> {
     word(i).bind(|i, w1| {
-        println!("obs_phrase.word.bind({:?}, {:?})", i, w1);
+        // println!("obs_phrase.word.bind({:?}, {:?})", i, w1);
 
         let a = |i| {
-            println!("obs_phrase.many({:?})", i);
+            // println!("obs_phrase.many({:?})", i);
 
             let w = |i| {
                 word(i).bind(|i, v| {
-                    println!("obs_phrase.word.bind({:?}, {:?})", i, v);
+                    // println!("obs_phrase.word.bind({:?}, {:?})", i, v);
                     i.ret(v)
                 })
             };
             let t = |i| {
-                token(i, b'.').map(|_| vec!(b'.')).bind(|i, v| {
-                    println!("obs_phrase.token.bind({:?}, {:?})", i, v);
+                token(i, b'.').map(|_| Bytes::from_slice(&[b'.'][..])).bind(|i, v| {
+                    // println!("obs_phrase.token.bind({:?}, {:?})", i, v);
                     i.ret(v)
                 })
             };
             let c = |i| {
-               cfws(i).map(|_| vec!()).bind(|i, v| {
-                    println!("obs_phrase.cfws.bind({:?}, {:?})", i, v);
+               cfws(i).map(|_| Bytes::empty()).bind(|i, v| {
+                    // println!("obs_phrase.cfws.bind({:?}, {:?})", i, v);
                     i.ret(v)
                })
             };
@@ -96,15 +97,11 @@ pub fn obs_phrase(i: Input<u8>) -> U8Result<Vec<u8>> {
         };
 
         // TODO: Fix cfws cycle, then remove the bound here...
-        bounded::many(i, (0..10), a).bind(|i, ws: Vec<Vec<u8>>| {
-            println!("obs_phrase.many(a).bind({:?}, {:?})", i, ws);
+        bounded::many(i, (0..10), a).bind(|i, ws: Vec<Bytes>| {
+            // println!("obs_phrase.many(a).bind({:?}, {:?})", i, ws);
 
-            let words = ws.into_iter().fold(w1, |mut acc, mut wn| {
-                acc.append(&mut wn);
-                acc
-            });
-
-            i.ret(words)
+            let bs = ws.into_iter().fold(w1, |acc, wn| acc.concat(&wn));
+            i.ret(bs)
         })
     })
 }
@@ -248,22 +245,24 @@ fn test_obs_zone() {
 
 // obs-local-part = word *("." word)
 // NOTE Excluding '@' from matches
-pub fn obs_local_part(i: Input<u8>) -> U8Result<&[u8]> {
-    matched_by(i, |i| { parse!{i;
-        word_not(|c| c == b'@');
-        skip_many(|i| parse!{i;
-            token(b'.');
-            word_not(|c| c == b'@');
+pub fn obs_local_part(i: Input<u8>) -> U8Result<Bytes> {
+    let b = |i| {
+        word_not(i, |c| c == b'@').then(|i| {
+            skip_many(i, |i| {
+                token(i, b'.').then(|i| {
+                    word_not(i, |c| c == b'@')
+                })
+            })
+        })
+    };
 
-            ret ()
-        });
-
-        ret ()
-    }}).bind(|i, v| i.ret(v.0))
+    matched_by(i, b).bind(|i, (v, _)| {
+        i.ret(Bytes::from_slice(v))
+    })
 }
 
 // obs-domain = atom *("." atom)
-pub fn obs_domain(i: Input<u8>) -> U8Result<&[u8]> {
+pub fn obs_domain(i: Input<u8>) -> U8Result<Bytes> {
     matched_by(i, |i| { parse!{i;
         atom();
         skip_many(|i| { parse!{i;
@@ -272,7 +271,7 @@ pub fn obs_domain(i: Input<u8>) -> U8Result<&[u8]> {
 
             ret ()
         }});
-    }}).map(|(v, _)| v)
+    }}).map(|(v, _)| Bytes::from_slice(v))
 }
 
 // obs-mbox-list = 1*([mailbox] [CFWS] "," [CFWS]) [mailbox]
@@ -322,12 +321,12 @@ pub fn obs_addr_list(i: Input<u8>) -> U8Result<Vec<Address>> {
 }
 
 // obs-id-left     =       local-part
-pub fn obs_id_left(i: Input<u8>) -> U8Result<Vec<u8>> {
+pub fn obs_id_left(i: Input<u8>) -> U8Result<Bytes> {
     local_part(i)
 }
 
 // obs-id-right    =       domain
-pub fn obs_id_right(i: Input<u8>) -> U8Result<Vec<u8>> {
+pub fn obs_id_right(i: Input<u8>) -> U8Result<Bytes> {
     domain(i)
 }
 

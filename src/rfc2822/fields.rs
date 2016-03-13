@@ -1,6 +1,7 @@
-use std::iter::FromIterator;
+use std::str;
 
 use chomp::*;
+use bytes::{Bytes, ToBytes, ByteStr};
 
 use rfc2822::*;
 use rfc2822::address::*;
@@ -193,49 +194,35 @@ pub fn bcc(i: Input<u8>) -> U8Result<Field> {
 }
 
 // no-fold-quote   =       DQUOTE *(qtext / quoted-pair) DQUOTE
-pub fn no_fold_quote(i: Input<u8>) -> U8Result<Vec<u8>> {
-    parse!{i;
-        dquote();
-        let t = many(|i| or(i, qtext, quoted_pair));
-        dquote();
-
-        ret t
-    }
+pub fn no_fold_quote(i: Input<u8>) -> U8Result<Bytes> {
+    dquote(i).then(|i| {
+        many(i, |i| or(i, qtext, quoted_pair)).bind(|i, t: Vec<u8>| {
+            dquote(i).then(|i| {
+                i.ret(Bytes::from_slice(&t[..]))
+            })
+        })
+    })
 }
 
 // id-left         =       dot-atom-text / no-fold-quote / obs-id-left
-pub fn id_left(i: Input<u8>) -> U8Result<Vec<u8>> {
-    or(i, 
-       |i| dot_atom_text(i).map(|i| {
-           let mut v = Vec::with_capacity(i.len());
-           v.extend(i);
-           v
-       }), 
-       |i| or(i, no_fold_quote, obs_id_left),
-       )
+pub fn id_left(i: Input<u8>) -> U8Result<Bytes> {
+    or(i, dot_atom_text, |i| or(i, no_fold_quote, obs_id_left))
 }
 
 // no-fold-literal =       "[" *(dtext / quoted-pair) "]"
-pub fn no_fold_literal(i: Input<u8>) -> U8Result<Vec<u8>> {
-    parse!{i;
-        token(b'[');
-        let t = many(|i| or(i, dtext, quoted_pair));
-        token(b'[');
-
-        ret t
-    }
+pub fn no_fold_literal(i: Input<u8>) -> U8Result<Bytes> {
+    token(i, b'[').then(|i| {
+        many(i, |i| or(i, dtext, quoted_pair)).bind(|i, t: Vec<u8>| {
+            token(i, b']').then(|i| {
+                i.ret(Bytes::from_slice(&t[..]))
+            })
+        })
+    })
 }
 
 // id-right        =       dot-atom-text / no-fold-literal / obs-id-right
-pub fn id_right(i: Input<u8>) -> U8Result<Vec<u8>> {
-    or(i, 
-       |i| dot_atom_text(i).map(|i| {
-           let mut v = Vec::with_capacity(i.len());
-           v.extend(i);
-           v
-       }), 
-       |i| or(i, no_fold_literal, obs_id_right),
-       )
+pub fn id_right(i: Input<u8>) -> U8Result<Bytes> {
+    or(i, dot_atom_text, |i| or(i, no_fold_literal, obs_id_right))
 }
 
 // msg-id          =       [CFWS] "<" id-left "@" id-right ">" [CFWS]
@@ -304,16 +291,16 @@ pub fn references(i: Input<u8>) -> U8Result<Field> {
 
 // subject         =       "Subject:" unstructured CRLF
 pub fn subject(i: Input<u8>) -> U8Result<Field> {
-    println!("subject({:?})", i);
+    // println!("subject({:?})", i);
     string(i, b"Subject:").then(|i| {
-        println!("subject.string(Subject:).then({:?})", i);
+        // println!("subject.string(Subject:).then({:?})", i);
         unstructured(i).bind(|i, u| {
-            println!("subject.unstructured.bind({:?}, {:?})", i, u);
+            // println!("subject.unstructured.bind({:?}, {:?})", i, u);
             crlf(i).then(|i| {
-                println!("subject.crlf.then({:?})", i);
-                println!("-> subject({:?})", u);
+                // println!("subject.crlf.then({:?})", i);
+                // println!("-> subject({:?})", u);
 
-                i.ret(Field::Subject(UnstructuredField{data: u}))
+                i.ret(Field::Subject(UnstructuredField{data: u.to_bytes()}))
             })
         })
     })
@@ -338,19 +325,19 @@ pub fn comments(i: Input<u8>) -> U8Result<Field> {
         let u = unstructured();
         crlf();
 
-        ret Field::Comments(UnstructuredField{data: u})
+        ret Field::Comments(UnstructuredField{data: u.to_bytes()})
     }
 }
 
 // keywords        =       "Keywords:" phrase *("," phrase) CRLF
 pub fn keywords(i: Input<u8>) -> U8Result<Field> {
-    parse!{i;
-        string(b"Keywords:");
-        let kws = sep_by1(phrase, |i| token(i, b',')); 
-        crlf();
-
-        ret Field::Keywords(KeywordsField{keywords: kws})
-    }
+    string(i, b"Keywords:").then(|i| {
+        sep_by1(i, phrase, |i| token(i, b',')).bind(|i, kws: Vec<Bytes>| {
+            crlf(i).then(|i| {
+                i.ret(Field::Keywords(KeywordsField{keywords: kws}))
+            })
+        })
+    })
 }
 
 // resent-date     =       "Resent-Date:" date-time CRLF
@@ -516,20 +503,19 @@ pub fn item_name(i: Input<u8>) -> U8Result<&[u8]> {
 // parsing its contents.  Effective match is:
 // received        =       "Received:" *(%d0-58 / %d60-255) ";" date-time CRLF
 pub fn received(i: Input<u8>) -> U8Result<ReceivedField> {
-    println!("received({:?})", i);
+    // println!("received({:?})", i);
     string(i, b"Received:").then(|i| {
-        println!("received.string(Received:).then");
+        // println!("received.string(Received:).then");
 
-        take_till(i, |c| c == b';').bind(|i, v| {
+        take_till(i, |c| c == b';').bind(|i, v: &[u8]| {
             token(i, b';').then(|i| {
-                println!("received.token.then");
+                // println!("received.token.then");
                 date_time(i).bind(|i, dt| {
-                    println!("received.date_time.bind({:?})", dt);
+                    // println!("received.date_time.bind({:?})", dt);
                     crlf(i).then(|i| {
-                        println!("received.crlf.then");
+                        // println!("received.crlf.then");
 
-                        let r = ReceivedField{date_time: dt, data: FromIterator::from_iter(v.iter().map(|i| i.clone()))};
-                        println!("-> received({:?})", r);
+                        let r = ReceivedField{date_time: dt, data: Bytes::from_slice(v)};
 
                         i.ret(r)
                     })
@@ -574,25 +560,25 @@ pub fn ftext(i: Input<u8>) -> U8Result<u8> {
 }
 
 // field-name      =       1*ftext
-pub fn field_name(i: Input<u8>) -> U8Result<Vec<u8>> {
-    many1(i, ftext)
+pub fn field_name(i: Input<u8>) -> U8Result<Bytes> {
+    matched_by(i, |i| skip_many1(i, ftext)).map(|(v, _)| Bytes::from_slice(v))
 }
 
 // optional-field  =       field-name ":" unstructured CRLF
 pub fn optional_field(i: Input<u8>) -> U8Result<Field> {
-    println!("optional_field({:?})", i);
+    // println!("optional_field({:?})", i);
 
     field_name(i).bind(|i, n| {
-        println!("optional_field.field_name.bind({:?}, {:?})", i, n);
+        // println!("optional_field.field_name.bind({:?}, {:?})", i, n);
 
         unstructured(i).bind(|i, v| {
-            println!("optional_field.unstructured.bind({:?}, {:?})", i, v);
+            // println!("optional_field.unstructured.bind({:?}, {:?})", i, v);
 
             crlf(i).then(|i| {
-                println!("optional_field.crlf.then({:?})", i);
-                println!("-> optional({:?}, {:?})", n, v);
+                // println!("optional_field.crlf.then({:?})", i);
+                // println!("-> optional({:?}, {:?})", n, v);
 
-                i.ret(Field::Optional(String::from_utf8(n).unwrap(), UnstructuredField{data: v}))
+                i.ret(Field::Optional(str::from_utf8(n.buf().bytes()).unwrap().to_string(), UnstructuredField{data: v}))
             })
         })
     })
