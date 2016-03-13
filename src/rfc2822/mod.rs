@@ -42,30 +42,14 @@ pub struct MessageID {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Message {
+    pub date: DateTimeField,
+    pub from: AddressesField,
     pub traces: Vec<Trace>,
     pub fields: Vec<Field>,
     pub body: Bytes,
 }
 
 impl Message {
-    pub fn date<'a>(&'a self) -> &'a DateTimeField {
-        self.fields.iter().filter_map(|i| {
-            match i {
-                &Field::Date(ref f) => Some(f),
-                _ => None,
-            }
-        }).next().unwrap()
-    }
-
-    pub fn from<'a>(&'a self) -> &'a AddressesField {
-        self.fields.iter().filter_map(|i| {
-            match i {
-                &Field::From(ref f) => Some(f),
-                _ => None,
-            }
-        }).next().unwrap()
-    }
-
     pub fn sender<'a>(&'a self) -> Option<&'a AddressField> {
         self.fields.iter().filter_map(|i| {
             match i {

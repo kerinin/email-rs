@@ -23,7 +23,29 @@ pub fn message(i: Input<u8>) -> U8Result<Message> {
             println!("message.crlf.then({:?})", i);
             body(i).bind(|i, body| {
                 println!("message.body.bind({:?}, {:?})", i, body);
-                i.ret(Message{traces: traces, fields: fields, body: body})
+
+                let mut maybe_date = None;
+                let mut maybe_from = None;
+
+                for field in fields.iter() {
+                    match field {
+                        &Field::Date(ref f) => maybe_date = Some(f.clone()),
+                        &Field::From(ref f) => maybe_from = Some(f.clone()),
+                        _ => {},
+                    }
+                }
+
+                if let (Some(date), Some(from)) = (maybe_date, maybe_from) {
+                    i.ret(Message{
+                        date: date,
+                        from: from,
+                        traces: traces, 
+                        fields: fields, 
+                        body: body,
+                    })
+                } else {
+                    i.err(Error::Unexpected)
+                }
             })
         })
     })

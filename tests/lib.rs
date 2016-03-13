@@ -26,7 +26,7 @@ fn example_1_1_1() {
     let date = DateTimeField{
         date_time: FixedOffset::east(-6*3600).ymd(1997, 11, 21).and_hms(9,55,6),
     };
-    assert_eq!(email.date(), &date);
+    assert_eq!(email.date, date);
 
     let from = AddressesField{
         addresses: vec!(Address::Mailbox{
@@ -35,7 +35,7 @@ fn example_1_1_1() {
             display_name: Some(Bytes::from_slice(b" John Doe ")),
         }),
     };
-    assert_eq!(email.from(), &from);
+    assert_eq!(email.from, from);
 
     let to = AddressesField{
         addresses: vec!(Address::Mailbox{
@@ -76,7 +76,7 @@ fn example_1_1_2() {
     let date = DateTimeField{
         date_time: FixedOffset::east(-6*3600).ymd(1997, 11, 21).and_hms(9,55,6),
     };
-    assert_eq!(email.date(), &date);
+    assert_eq!(email.date, date);
 
     let from = AddressesField{
         addresses: vec!(Address::Mailbox{
@@ -85,7 +85,7 @@ fn example_1_1_2() {
             display_name: Some(Bytes::from_slice(b" John Doe ")),
         }),
     };
-    assert_eq!(email.from(), &from);
+    assert_eq!(email.from, from);
 
     let sender = AddressField{
         address: Address::Mailbox{
@@ -135,7 +135,7 @@ fn example_1_2() {
     let date = DateTimeField{
         date_time: FixedOffset::east(2*3600).ymd(2003, 7, 1).and_hms(10,52,37),
     };
-    assert_eq!(email.date(), &date);
+    assert_eq!(email.date, date);
 
     let from = AddressesField{
         addresses: vec!(Address::Mailbox{
@@ -144,7 +144,7 @@ fn example_1_2() {
             display_name: Some(Bytes::from_slice(b" Joe Q. Public ")),
         }),
     };
-    assert_eq!(email.from(), &from);
+    assert_eq!(email.from, from);
 
     let to = AddressesField{
         addresses: vec!(
