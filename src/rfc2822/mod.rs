@@ -90,37 +90,30 @@ pub enum Field {
 
 #[derive(Debug)]
 pub struct DateTimeField {
-    // name: Vec<u8>,
     date_time: DateTime<FixedOffset>,
 }
 
 #[derive(Debug)]
 pub struct AddressesField {
-    // name: Vec<u8>,
     addresses: Vec<Address>,
 }
 
 #[derive(Debug)]
 pub struct AddressField {
-    // name: Vec<u8>,
     address: Address,
 }
 
 #[derive(Debug)]
 pub struct MessageIDField {
-    // name: Vec<u8>,
-    message_id: MessageID,
 }
 
 #[derive(Debug)]
 pub struct MessageIDsField {
-    // name: Vec<u8>,
     message_ids: Vec<MessageID>,
 }
 
 #[derive(Debug)]
 pub struct UnstructuredField {
-    // name: Vec<u8>,
     data: Vec<u8>,
 }
 
@@ -130,6 +123,7 @@ pub struct KeywordsField {
 }
 
 impl Field {
+    /// Returns true if this is an "unstructured" field
     pub fn is_unstructured(&self) -> bool {
         match self {
             &Field::Optional(_, _) => true,
@@ -137,6 +131,7 @@ impl Field {
         }
     }
 
+    /// Returns true if "structured field" parsing failed
     pub fn is_malformed(&self) -> bool {
         match self {
             &Field::Optional(ref name, _) => {
