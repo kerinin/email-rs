@@ -25,7 +25,7 @@ pub fn orig_date(i: Input<u8>) -> U8Result<Field> {
             crlf(i).then(|i| {
                 println!("orig_date.crlf.then({:?})", i);
 
-                i.ret(Field::Date(d))
+                i.ret(Field::Date(DateTimeField{date_time: d}))
             })
         })
     })
@@ -66,7 +66,7 @@ pub fn from(i: Input<u8>) -> U8Result<Field> {
             crlf(i).then(|i| {
                 println!("from.crlf.then({:?})", i);
                 println!("-> from({:?})", l);
-                i.ret(Field::From(l))
+                i.ret(Field::From(AddressesField{addresses: l}))
             })
         })
     })
@@ -99,7 +99,7 @@ pub fn sender(i: Input<u8>) -> U8Result<Field> {
         let l = mailbox();
         crlf();
 
-        ret Field::Sender(l)
+        ret Field::Sender(AddressField{address: l})
     }
 }
 
@@ -110,22 +110,25 @@ pub fn reply_to(i: Input<u8>) -> U8Result<Field> {
         let l = address_list();
         crlf();
 
-        ret Field::ReplyTo(l)
+        ret Field::ReplyTo(AddressesField{addresses: l})
     }
 }
 
 // to              =       "To:" address-list CRLF
 pub fn to(i: Input<u8>) -> U8Result<Field> {
     println!("to({:?})", i);
+
     string(i, b"To:").then(|i| {
         println!("to.string(To:).then({:?})", i);
+
         address_list(i).bind(|i, l| {
             println!("to.address_list.bind({:?}, {:?})", i, l);
+
             crlf(i).then(|i| {
                 println!("to.crlf.then({:?})", i);
                 println!("-> to({:?})", l);
 
-                i.ret(Field::To(l))
+                i.ret(Field::To(AddressesField{addresses: l}))
             })
         })
     })
@@ -165,7 +168,7 @@ pub fn cc(i: Input<u8>) -> U8Result<Field> {
                 println!("cc.crlf.then({:?})", i);
                 println!("-> cc({:?})", l);
 
-                i.ret(Field::Cc(l))
+                i.ret(Field::Cc(AddressesField{addresses: l}))
             })
         })
     })
@@ -185,7 +188,7 @@ pub fn bcc(i: Input<u8>) -> U8Result<Field> {
         let l = address_list();
         crlf();
 
-        ret Field::Bcc(l)
+        ret Field::Bcc(AddressesField{addresses: l})
     }
 }
 
@@ -236,7 +239,7 @@ pub fn id_right(i: Input<u8>) -> U8Result<Vec<u8>> {
 }
 
 // msg-id          =       [CFWS] "<" id-left "@" id-right ">" [CFWS]
-pub fn msg_id(i: Input<u8>) -> U8Result<Vec<u8>> {
+pub fn msg_id(i: Input<u8>) -> U8Result<MessageID> {
     parse!{i;
         option(cfws, ());
         token(b'<');
@@ -246,18 +249,7 @@ pub fn msg_id(i: Input<u8>) -> U8Result<Vec<u8>> {
         token(b'>');
         option(cfws, ());
 
-        ret {
-            // NOTE: See if we can rely on `id_left` and `id_right` being
-            // continguous so we can just use `matched_by` here...
-            let mut v = Vec::with_capacity(l.len() + r.len() + 3);
-            v.push(b'<');
-            v.extend(l);
-            v.push(b'@');
-            v.extend(r);
-            v.push(b'>');
-            v
-        }
-
+        ret MessageID{id_left: l, id_right: r}
     }
 }
 
@@ -268,7 +260,7 @@ pub fn message_id(i: Input<u8>) -> U8Result<Field> {
         let id = msg_id();
         crlf();
 
-        ret Field::MessageID(id)
+        ret Field::MessageID(MessageIDField{message_id: id})
     }
 }
 
@@ -295,7 +287,7 @@ pub fn in_reply_to(i: Input<u8>) -> U8Result<Field> {
         let ids = many1(msg_id);
         crlf();
 
-        ret Field::InReplyTo(ids)
+        ret Field::InReplyTo(MessageIDsField{message_ids: ids})
     }
 }
 
@@ -306,7 +298,7 @@ pub fn references(i: Input<u8>) -> U8Result<Field> {
         let ids = many1(msg_id);
         crlf();
 
-        ret Field::References(ids)
+        ret Field::References(MessageIDsField{message_ids: ids})
     }
 }
 
@@ -321,7 +313,7 @@ pub fn subject(i: Input<u8>) -> U8Result<Field> {
                 println!("subject.crlf.then({:?})", i);
                 println!("-> subject({:?})", u);
 
-                i.ret(Field::Subject(u))
+                i.ret(Field::Subject(UnstructuredField{data: u}))
             })
         })
     })
@@ -346,7 +338,7 @@ pub fn comments(i: Input<u8>) -> U8Result<Field> {
         let u = unstructured();
         crlf();
 
-        ret Field::Comments(u)
+        ret Field::Comments(UnstructuredField{data: u})
     }
 }
 
@@ -357,7 +349,7 @@ pub fn keywords(i: Input<u8>) -> U8Result<Field> {
         let kws = sep_by1(phrase, |i| token(i, b',')); 
         crlf();
 
-        ret Field::Keywords(kws)
+        ret Field::Keywords(KeywordsField{keywords: kws})
     }
 }
 
@@ -368,7 +360,7 @@ pub fn resent_date(i: Input<u8>) -> U8Result<Resent> {
         let d = date_time();
         crlf();
 
-        ret Resent::Date(d)
+        ret Resent::Date(DateTimeField{date_time: d})
     }
 }
 
@@ -379,7 +371,7 @@ pub fn resent_from(i: Input<u8>) -> U8Result<Resent> {
         let l = mailbox_list();
         crlf();
 
-        ret Resent::From(l)
+        ret Resent::From(AddressesField{addresses: l})
     }
 }
 
@@ -390,7 +382,7 @@ pub fn resent_sender(i: Input<u8>) -> U8Result<Resent> {
         let l = mailbox();
         crlf();
 
-        ret Resent::Sender(l)
+        ret Resent::Sender(AddressField{address: l})
     }
 }
 
@@ -401,7 +393,7 @@ pub fn resent_to(i: Input<u8>) -> U8Result<Resent> {
         let l = address_list();
         crlf();
 
-        ret Resent::To(l)
+        ret Resent::To(AddressesField{addresses: l})
     }
 }
 
@@ -412,7 +404,7 @@ pub fn resent_cc(i: Input<u8>) -> U8Result<Resent> {
         let l = address_list();
         crlf();
 
-        ret Resent::Cc(l)
+        ret Resent::Cc(AddressesField{addresses: l})
     }
 }
 
@@ -423,7 +415,7 @@ pub fn resent_bcc(i: Input<u8>) -> U8Result<Resent> {
         let l = address_list();
         crlf();
 
-        ret Resent::Bcc(l)
+        ret Resent::Bcc(AddressesField{addresses: l})
     }
 }
 
@@ -434,7 +426,7 @@ pub fn resent_msg_id(i: Input<u8>) -> U8Result<Resent> {
         let id = msg_id();
         crlf();
 
-        ret Resent::MessageID(id)
+        ret Resent::MessageID(MessageIDField{message_id: id})
     }
 }
 
@@ -481,48 +473,49 @@ pub fn item_name(i: Input<u8>) -> U8Result<&[u8]> {
 
 // item-value      =       1*angle-addr / addr-spec /
 //                          atom / domain / msg-id
-pub fn item_value(i: Input<u8>) -> U8Result<ReceivedValue> {
-    or(i, 
-       |i| many1(i, angle_addr).map(|a| ReceivedValue::Addresses(a)),
-       |i| or(i, |i| addr_spec(i).map(|a| ReceivedValue::Address(a)),
-       |i| or(i, |i| atom(i).map(|v| ReceivedValue::Text(FromIterator::from_iter(v.iter().map(|i| i.clone())))),
-       |i| or(i, |i| domain(i).map(|v| ReceivedValue::Domain(v)), 
-              |i| msg_id(i).map(|v| ReceivedValue::MessageID(v))))))
-}
+// pub fn item_value(i: Input<u8>) -> U8Result<ReceivedValue> {
+//     or(i, 
+//        |i| many1(i, angle_addr).map(|a| ReceivedValue::Addresses(a)),
+//        |i| or(i, |i| addr_spec(i).map(|a| ReceivedValue::Address(a)),
+//        |i| or(i, |i| atom(i).map(|v| ReceivedValue::Text(FromIterator::from_iter(v.iter().map(|i| i.clone())))),
+//        |i| or(i, |i| domain(i).map(|v| ReceivedValue::Domain(v)), 
+//               |i| msg_id(i).map(|v| ReceivedValue::MessageID(v))))))
+// }
 
 // name-val-pair   =       item-name CFWS item-value
-pub fn name_val_pair(i: Input<u8>) -> U8Result<(&[u8], ReceivedValue)> {
-    println!("name_val_pair({:?})", i);
-    item_name(i).bind(|i, n| {
-        println!("name_val_pair.item_name.bind({:?})", n);
-        cfws(i).then(|i| {
-            println!("name_val_pair.cfws");
-            item_value(i).bind(|i, v| {
-                println!("name_val_pair.item_value.bind({:?})", v);
+// pub fn name_val_pair(i: Input<u8>) -> U8Result<(&[u8], ReceivedValue)> {
+//     println!("name_val_pair({:?})", i);
+//     item_name(i).bind(|i, n| {
+//         println!("name_val_pair.item_name.bind({:?})", n);
+//         cfws(i).then(|i| {
+//             println!("name_val_pair.cfws");
+//             item_value(i).bind(|i, v| {
+//                 println!("name_val_pair.item_value.bind({:?})", v);
+//
+//                 i.ret((n, v))
+//             })
+//         })
+//     })
+// }
 
-                i.ret((n, v))
-            })
-        })
-    })
-}
 // name-val-list   =       [CFWS] [name-val-pair *(CFWS name-val-pair)]
-pub fn name_val_list(i: Input<u8>) -> U8Result<Vec<(&[u8], ReceivedValue)>> {
-    println!("name_val_list({:?})", i);
-    cfws(i).then(|i| {
-        println!("name_val_list.cfws.then");
-        sep_by(i, name_val_pair, cfws).bind(|i, list| {
-            println!("name_val_list.sep_by.bind({:?})", list);
-
-            i.ret(list)
-        })
-    })
-}
+// pub fn name_val_list(i: Input<u8>) -> U8Result<Vec<(&[u8], ReceivedValue)>> {
+//     println!("name_val_list({:?})", i);
+//     cfws(i).then(|i| {
+//         println!("name_val_list.cfws.then");
+//         sep_by(i, name_val_pair, cfws).bind(|i, list| {
+//             println!("name_val_list.sep_by.bind({:?})", list);
+//
+//             i.ret(list)
+//         })
+//     })
+// }
 
 // received        =       "Received:" name-val-list ";" date-time CRLF
 // NOTE: This field is more complex than I feel like supporting - punting on
 // parsing its contents.  Effective match is:
 // received        =       "Received:" *(%d0-58 / %d60-255) ";" date-time CRLF
-pub fn received(i: Input<u8>) -> U8Result<Received> {
+pub fn received(i: Input<u8>) -> U8Result<ReceivedField> {
     println!("received({:?})", i);
     string(i, b"Received:").then(|i| {
         println!("received.string(Received:).then");
@@ -535,7 +528,7 @@ pub fn received(i: Input<u8>) -> U8Result<Received> {
                     crlf(i).then(|i| {
                         println!("received.crlf.then");
 
-                        let r = Received{date_time: dt, data: FromIterator::from_iter(v.iter().map(|i| i.clone()))};
+                        let r = ReceivedField{date_time: dt, data: FromIterator::from_iter(v.iter().map(|i| i.clone()))};
                         println!("-> received({:?})", r);
 
                         i.ret(r)
@@ -558,7 +551,7 @@ fn test_received() {
 }
 
 // trace           =       [return-path] 1*received
-pub fn trace(i: Input<u8>) -> U8Result<(Option<Address>, Vec<Received>)> {
+pub fn trace(i: Input<u8>) -> U8Result<(Option<Address>, Vec<ReceivedField>)> {
     println!("trace({:?})", i);
     option(i, |i| {
         return_path(i).map(|r| Some(r))
@@ -588,15 +581,18 @@ pub fn field_name(i: Input<u8>) -> U8Result<Vec<u8>> {
 // optional-field  =       field-name ":" unstructured CRLF
 pub fn optional_field(i: Input<u8>) -> U8Result<Field> {
     println!("optional_field({:?})", i);
+
     field_name(i).bind(|i, n| {
         println!("optional_field.field_name.bind({:?}, {:?})", i, n);
+
         unstructured(i).bind(|i, v| {
             println!("optional_field.unstructured.bind({:?}, {:?})", i, v);
+
             crlf(i).then(|i| {
                 println!("optional_field.crlf.then({:?})", i);
                 println!("-> optional({:?}, {:?})", n, v);
 
-                i.ret(Field::Optional(n, v))
+                i.ret(Field::Optional(String::from_utf8(n).unwrap(), UnstructuredField{data: v}))
             })
         })
     })

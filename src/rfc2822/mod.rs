@@ -33,22 +33,100 @@ pub enum Address {
 }
 
 #[derive(Debug)]
+pub struct MessageID {
+    id_left: Vec<u8>,
+    id_right: Vec<u8>,
+}
+
+#[derive(Debug)]
+pub struct Message {
+    pub traces: Vec<Trace>,
+    pub fields: Vec<Field>,
+    pub body: Vec<u8>,
+}
+
+#[derive(Debug)]
+pub struct Trace {
+    pub return_path: Option<Address>,
+    pub received: Vec<ReceivedField>,
+    pub fields: Vec<Resent>,
+}
+
+#[derive(Debug)]
+pub struct ReceivedField {
+    pub date_time: DateTime<FixedOffset>,
+    pub data: Vec<u8>,
+}
+
+#[derive(Debug)]
+pub enum Resent {
+    Date(DateTimeField),
+    From(AddressesField),
+    Sender(AddressField),
+    To(AddressesField),
+    Cc(AddressesField),
+    Bcc(AddressesField),
+    MessageID(MessageIDField),
+}
+
+#[derive(Debug)]
 pub enum Field {
-    Date(DateTime<FixedOffset>),
-    From(Vec<Address>),
-    Sender(Address),
-    ReplyTo(Vec<Address>),
-    To(Vec<Address>),
-    Cc(Vec<Address>),
-    Bcc(Vec<Address>),
-    MessageID(Vec<u8>),
-    InReplyTo(Vec<Vec<u8>>),
-    References(Vec<Vec<u8>>),
-    Subject(Vec<u8>),
-    Comments(Vec<u8>),
-    Keywords(Vec<Vec<u8>>),
-    ReturnPath(Address),
-    Optional(Vec<u8>, Vec<u8>),
+    Date(DateTimeField),
+    From(AddressesField),
+    Sender(AddressField),
+    ReplyTo(AddressesField),
+    To(AddressesField),
+    Cc(AddressesField),
+    Bcc(AddressesField),
+    MessageID(MessageIDField),
+    InReplyTo(MessageIDsField),
+    References(MessageIDsField),
+    Subject(UnstructuredField),
+    Comments(UnstructuredField),
+    Keywords(KeywordsField),
+    ReturnPath(AddressField),
+    Optional(String, UnstructuredField),
+}
+
+#[derive(Debug)]
+pub struct DateTimeField {
+    // name: Vec<u8>,
+    date_time: DateTime<FixedOffset>,
+}
+
+#[derive(Debug)]
+pub struct AddressesField {
+    // name: Vec<u8>,
+    addresses: Vec<Address>,
+}
+
+#[derive(Debug)]
+pub struct AddressField {
+    // name: Vec<u8>,
+    address: Address,
+}
+
+#[derive(Debug)]
+pub struct MessageIDField {
+    // name: Vec<u8>,
+    message_id: MessageID,
+}
+
+#[derive(Debug)]
+pub struct MessageIDsField {
+    // name: Vec<u8>,
+    message_ids: Vec<MessageID>,
+}
+
+#[derive(Debug)]
+pub struct UnstructuredField {
+    // name: Vec<u8>,
+    data: Vec<u8>,
+}
+
+#[derive(Debug)]
+pub struct KeywordsField {
+    keywords: Vec<Vec<u8>>,
 }
 
 impl Field {
@@ -58,44 +136,47 @@ impl Field {
             _ => false,
         }
     }
+
+    pub fn is_malformed(&self) -> bool {
+        match self {
+            &Field::Optional(ref name, _) => {
+                match name.to_lowercase().as_str() {
+                    "date" => true,
+                    "from" => true,
+                    "sender" => true,
+                    "reply-to" => true,
+                    "to" => true,
+                    "cc" => true,
+                    "bcc" => true,
+                    "message-id" => true,
+                    "in-reply-to" => true,
+                    "references" => true,
+                    "subject" => true,
+                    "comments" => true,
+                    "keywords" => true,
+                    "resent-date" => true,
+                    "resent-from" => true,
+                    "resent-sender" => true,
+                    "resent-to" => true,
+                    "resent-cc" => true,
+                    "resent-bcc" => true,
+                    "resent-message-id" => true,
+                    "return-path" => true,
+                    "received" => true,
+                    _ => false,
+                }
+            },
+            _ => false,
+        }
+    }
 }
 
-#[derive(Debug)]
-pub enum Resent {
-    Date(DateTime<FixedOffset>),
-    From(Vec<Address>),
-    Sender(Address),
-    To(Vec<Address>),
-    Cc(Vec<Address>),
-    Bcc(Vec<Address>),
-    MessageID(Vec<u8>),
-}
+// #[derive(Debug)]
+// pub enum ReceivedValue {
+//     Addresses(Vec<Address>),
+//     Address(Address),
+//     Domain(Vec<u8>),
+//     MessageID(Vec<u8>),
+//     Text(Vec<u8>),
+// }
 
-#[derive(Debug)]
-pub enum ReceivedValue {
-    Addresses(Vec<Address>),
-    Address(Address),
-    Domain(Vec<u8>),
-    MessageID(Vec<u8>),
-    Text(Vec<u8>),
-}
-
-#[derive(Debug)]
-pub struct Received {
-    pub date_time: DateTime<FixedOffset>,
-    pub data: Vec<u8>,
-}
-
-#[derive(Debug)]
-pub struct Trace {
-    pub return_path: Option<Address>,
-    pub received: Vec<Received>,
-    pub fields: Vec<Resent>,
-}
-
-#[derive(Debug)]
-pub struct Message {
-    pub traces: Vec<Trace>,
-    pub fields: Vec<Field>,
-    pub body: Vec<u8>,
-}

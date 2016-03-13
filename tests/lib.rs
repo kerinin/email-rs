@@ -13,6 +13,7 @@ fn example_1_1_1() {
     assert!(msg.is_ok());
     for field in msg.unwrap().fields.iter() {
         assert!(!field.is_unstructured());
+        assert!(!field.is_malformed());
     }
 }
 
@@ -25,6 +26,7 @@ fn example_1_1_2() {
     assert!(msg.is_ok());
     for field in msg.unwrap().fields.iter() {
         assert!(!field.is_unstructured());
+        assert!(!field.is_malformed());
     }
 }
 
@@ -37,6 +39,7 @@ fn example_1_2() {
     assert!(msg.is_ok());
     for field in msg.unwrap().fields.iter() {
         assert!(!field.is_unstructured());
+        assert!(!field.is_malformed());
     }
 }
 
@@ -49,6 +52,7 @@ fn example_1_3() {
     assert!(msg.is_ok());
     for field in msg.unwrap().fields.iter() {
         assert!(!field.is_unstructured());
+        assert!(!field.is_malformed());
     }
 }
 
@@ -61,6 +65,7 @@ fn example_2_1() {
     assert!(msg.is_ok());
     for field in msg.unwrap().fields.iter() {
         assert!(!field.is_unstructured());
+        assert!(!field.is_malformed());
     }
 }
 
@@ -73,6 +78,7 @@ fn example_2_3() {
     assert!(msg.is_ok());
     for field in msg.unwrap().fields.iter() {
         assert!(!field.is_unstructured());
+        assert!(!field.is_malformed());
     }
 }
 
@@ -85,6 +91,7 @@ fn example_2_2() {
     assert!(msg.is_ok());
     for field in msg.unwrap().fields.iter() {
         assert!(!field.is_unstructured());
+        assert!(!field.is_malformed());
     }
 }
 
@@ -97,6 +104,7 @@ fn example_3_1() {
     assert!(msg.is_ok());
     for field in msg.unwrap().fields.iter() {
         assert!(!field.is_unstructured());
+        assert!(!field.is_malformed());
     }
 }
 
@@ -111,6 +119,7 @@ fn example_3_2() {
     assert!(msg.is_ok());
     for field in msg.unwrap().fields.iter() {
         assert!(!field.is_unstructured());
+        assert!(!field.is_malformed());
     }
 }
 
@@ -123,6 +132,7 @@ fn example_4() {
     assert!(msg.is_ok());
     for field in msg.unwrap().fields.iter() {
         assert!(!field.is_unstructured());
+        assert!(!field.is_malformed());
     }
 }
 
@@ -135,6 +145,7 @@ fn example_5() {
     assert!(msg.is_ok());
     for field in msg.unwrap().fields.iter() {
         assert!(!field.is_unstructured());
+        assert!(!field.is_malformed());
     }
 }
 
@@ -149,6 +160,7 @@ fn example_6_1() {
     assert!(msg.is_ok());
     for field in msg.unwrap().fields.iter() {
         assert!(!field.is_unstructured());
+        assert!(!field.is_malformed());
     }
 }
 
@@ -161,6 +173,7 @@ fn example_6_2() {
     assert!(msg.is_ok());
     for field in msg.unwrap().fields.iter() {
         assert!(!field.is_unstructured());
+        assert!(!field.is_malformed());
     }
 }
 
@@ -175,5 +188,6 @@ fn example_6_3() {
     assert!(msg.is_ok());
     for field in msg.unwrap().fields.iter() {
         assert!(!field.is_unstructured());
+        assert!(!field.is_malformed());
     }
 }
