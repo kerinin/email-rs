@@ -8,7 +8,6 @@ use rfc2822::atom::*;
 use rfc2822::folding::*;
 use rfc2822::misc::*;
 use rfc2822::obsolete::*;
-use rfc2822::primitive::*;
 use rfc2822::quoted::*;
 
 // display-name = phrase
@@ -70,11 +69,24 @@ fn test_local_part() {
 //                         %d33-90 /       ; The rest of the US-ASCII
 //                         %d94-126        ;  characters not including "[",
 //                                         ;  "]", or "\"
+const DTEXT: [bool; 256] = [
+    //  0      1      2      3      4      5      6      7      8      9     10     11     12     13     14     15     16     17     18     19
+    false, true,  true,  true,  true,  true,  true,  true,  true,  false, false, true,  true,  false, true,  true,  true,  true,  true,  true,  //   0 -  19
+    true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  false, true,  true,  true,  true,  true,  true,  true,  //  20 -  39
+    true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  //  40 -  59
+    true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  //  60 -  79
+    true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  false, false, false, true,  true,  true,  true,  true,  true,  //  80 -  99
+    true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  // 100 - 119
+    true,  true,  true,  true,  true,  true,  true,  true,  false, false, false, false, false, false, false, false, false, false, false, false, // 120 - 139
+    false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, // 140 - 159
+    false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, // 160 - 179
+    false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, // 180 - 199
+    false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, // 200 - 219
+    false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, // 220 - 239
+    false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false                              // 240 - 256
+];
 pub fn dtext(i: Input<u8>) -> U8Result<u8> {
-    or(i, 
-       no_ws_ctl,
-       |i| satisfy(i, |i| (33 <= i && i <= 90) || (94 <= i && i <= 126)),
-       )
+    satisfy(i, |c| DTEXT[c as usize])
 }
 
 // dcontent = dtext / quoted-pair

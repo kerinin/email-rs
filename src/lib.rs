@@ -1,4 +1,5 @@
 //! Parser/Serializer for emails
+// #![feature(test)]
 #![recursion_limit="1000"]
 #[macro_use]
 extern crate chomp;
