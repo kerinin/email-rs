@@ -393,7 +393,10 @@ pub fn unstructured<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
 // group           =   display-name ":" [group-list] ";" [CFWS]
 //
 // display-name    =   phrase
-//
+pub fn display_name<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
+    phrase(i)
+}
+
 // mailbox-list    =   (mailbox *("," mailbox)) / obs-mbox-list
 //
 // address-list    =   (address *("," address)) / obs-addr-list
@@ -405,7 +408,11 @@ pub fn unstructured<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
 // local-part      =   dot-atom / quoted-string / obs-local-part
 //
 // domain          =   dot-atom / domain-literal / obs-domain
-//
+// TODO: Support new fields
+pub fn domain<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
+    obs_domain(i)
+}
+
 // domain-literal  =   [CFWS] "[" *([FWS] dtext) [FWS] "]" [CFWS]
 //
 // dtext           =   %d33-90 /          ; Printable US-ASCII
@@ -415,22 +422,21 @@ pub fn unstructured<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
 // message         =   (fields / obs-fields)
 //                     [CRLF body]
 // TODO: Support new fields
-/*
 pub fn message<I: U8Input>(i: I) -> SimpleResult<I, Message> {
-    fields(i).bind(|i, f| {
+    obs_fields(i).bind(|i, f| {
         option(i, |i| {
             crlf(i).then(|i| {
                 body(i)
             })
         }, Bytes::empty()).bind(|i, b| {
             let message = Message {
+                fields: f,
                 body: b,
             };
             i.ret(message)
         })
     })
 }
-*/
 
 // body            =   (*(*998text CRLF) *998text) / obs-body
 // TODO: support new fields
@@ -827,10 +833,48 @@ pub fn obs_fws<I: U8Input>(i: I) -> SimpleResult<I, ()> {
 // obs-angle-addr  =   [CFWS] "<" obs-route addr-spec ">" [CFWS]
 //
 // obs-route       =   obs-domain-list ":"
-//
+pub fn obs_route<I: U8Input>(i: I) -> SimpleResult<I, Vec<Bytes>> { 
+    obs_domain_list(i).bind(|i, l| {
+        token(i, b':').then(|i| {
+            i.ret(l)
+        })
+    })
+}
+
 // obs-domain-list =   *(CFWS / ",") "@" domain
 //                     *("," [CFWS] ["@" domain])
-//
+pub fn obs_domain_list<I: U8Input>(i: I) -> SimpleResult<I, Vec<Bytes>> {
+    skip_many(i, |i| {
+        or(i, cfws, |i| token(i, b',').map(|_| ()))
+    }).then(|i| {
+        token(i, b'@').then(|i| {
+            domain(i).bind(|i, domain1| {
+                many(i, |i| {
+                    token(i, b',').then(|i| {
+                        option(i, cfws, ()).then(|i| {
+                            option(i, |i| {
+                                token(i, b'@').then(|i| {
+                                    domain(i).map(|d| Some(d))
+                                })
+                            }, None)
+                        })
+                    })
+                }).map(|bufs: Vec<Option<Bytes>>| {
+                    let mut domains = Vec::with_capacity(bufs.len()+1);
+                    domains.push(domain1);
+
+                    bufs.into_iter().fold(domains, |mut l, r| {
+                        if r.is_some() {
+                            l.push(r.unwrap())
+                        }
+                        l
+                    })
+                })
+            })
+        })
+    })
+}
+
 // obs-mbox-list   =   *([CFWS] ",") mailbox *("," [mailbox / CFWS])
 //
 // obs-addr-list   =   *([CFWS] ",") address *("," [address / CFWS])
@@ -840,7 +884,20 @@ pub fn obs_fws<I: U8Input>(i: I) -> SimpleResult<I, ()> {
 // obs-local-part  =   word *("." word)
 //
 // obs-domain      =   atom *("." atom)
-//
+pub fn obs_domain<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
+    atom(i).bind(|i, a1| {
+        many(i, |i| {
+            token(i, b'.').bind(|i, d_n| {
+                atom(i).bind(|i, a_n| {
+                    i.ret(Bytes::from_slice(&[d_n]).concat(&a_n))
+                })
+            })
+        }).map(|bufs: Vec<Bytes>| {
+            bufs.into_iter().fold(a1, |l, r| l.concat(&r))
+        })
+    })
+}
+
 // obs-dtext       =   obs-NO-WS-CTL / quoted-pair
 //
 // obs-fields      =   *(obs-return /
@@ -869,7 +926,14 @@ pub fn obs_fws<I: U8Input>(i: I) -> SimpleResult<I, ()> {
 //                     obs-optional)
 // TODO: Parse actual fields
 pub fn obs_fields<I: U8Input>(i: I) -> SimpleResult<I, Vec<Field>> {
-    many(i, obs_optional)
+    // NOTE: REALLY wish the parser macro worked right about here
+    many(i, |i| {
+        or(i, 
+           obs_subject,
+           |i| or(i,
+              obs_comments,
+              obs_optional))
+    })
 }
 
 // obs-orig-date   =   "Date" *WSP ":" date-time CRLF
@@ -898,9 +962,39 @@ pub fn obs_fields<I: U8Input>(i: I) -> SimpleResult<I, Vec<Field>> {
 // obs-id-right    =   domain
 //
 // obs-subject     =   "Subject" *WSP ":" unstructured CRLF
-//
+pub fn obs_subject<I: U8Input>(i: I) -> SimpleResult<I, Field> {
+    string(i, b"Subject").then(|i| {
+        option(i, wsp, 0).then(|i| {
+            token(i, b':').then(|i| {
+                unstructured(i).bind(|i, v| {
+                    crlf(i).then(|i| {
+                        let value = UnstructuredField {data: v};
+
+                        i.ret(Field::Subject(value))
+                    })
+                })
+            })
+        })
+    })
+}
+
 // obs-comments    =   "Comments" *WSP ":" unstructured CRLF
-//
+pub fn obs_comments<I: U8Input>(i: I) -> SimpleResult<I, Field> {
+    string(i, b"Comments").then(|i| {
+        option(i, wsp, 0).then(|i| {
+            token(i, b':').then(|i| {
+                unstructured(i).bind(|i, v| {
+                    crlf(i).then(|i| {
+                        let value = UnstructuredField {data: v};
+
+                        i.ret(Field::Comments(value))
+                    })
+                })
+            })
+        })
+    })
+}
+
 // obs-keywords    =   "Keywords" *WSP ":" obs-phrase-list CRLF
 //
 // obs-resent-from =   "Resent-From" *WSP ":" mailbox-list CRLF

@@ -12,7 +12,7 @@ pub mod rfc5322;
 
 use chrono::datetime::DateTime;
 use chrono::offset::fixed::FixedOffset;
-use bytes::{Bytes, ByteStr};
+use bytes::Bytes;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Day { Mon, Tue, Wed, Thu, Fri, Sat, Sun }
@@ -44,7 +44,7 @@ pub struct Message {
     // pub date: DateTimeField,
     // pub from: AddressesField,
     // pub traces: Vec<Trace>,
-    // pub fields: Vec<Field>,
+    pub fields: Vec<Field>,
     pub body: Bytes,
 }
 
