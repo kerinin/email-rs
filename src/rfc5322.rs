@@ -1,4 +1,5 @@
 //! RFC5322 specifies message bodies (supercedes RFC2822)
+//!
 
 use bytes::{Bytes, ByteStr};
 
@@ -48,12 +49,10 @@ pub fn cr<I: U8Input>(i: I) -> SimpleResult<I, u8> {
 
 // CRLF           =  CR LF
 //                        ; Internet standard newline
-pub fn crlf<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
-    cr(i).bind(|i, v_cr| {
-        lf(i).bind(|i, v_lf| {
-            i.ret(Bytes::from_slice(&vec!(v_cr, v_lf)))
-        })
-    })
+pub fn crlf<I: U8Input>(i: I) -> SimpleResult<I, I::Buffer> {
+    matched_by(i, |i| {
+        cr(i).then(lf)
+    }).map(|(buf, _)| buf)
 }
 
 // CTL            =  %x00-1F / %x7F
@@ -251,20 +250,20 @@ pub fn atext<I: U8Input>(i: I) -> SimpleResult<I, u8> {
 }
 
 // atom            =   [CFWS] 1*atext [CFWS]
-pub fn atom<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
+pub fn atom<I: U8Input>(i: I) -> SimpleResult<I, I::Buffer> {
     option(i, cfws, ()).then(|i| {
         matched_by(i, |i| {
             skip_many1(i, atext)
-        }).map(|(buf, _)| Bytes::from_slice(&buf.into_vec()))
-    }).bind(|i, buf| {
-        option(i, cfws, ()).bind(|i, _| {
-            i.ret(buf)
+        }).bind(|i, (buf, _)| {
+            option(i, cfws, ()).then(|i| {
+                i.ret(buf)
+            })
         })
     })
 }
 
 // dot-atom-text   =   1*atext *("." 1*atext)
-pub fn dot_atom_text<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
+pub fn dot_atom_text<I: U8Input>(i: I) -> SimpleResult<I, I::Buffer> {
     matched_by(i, |i| {
         skip_many1(i, atext).then(|i| {
             skip_many1(i, |i| {
@@ -273,15 +272,15 @@ pub fn dot_atom_text<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
                 })
             })
         })
-    }).map(|(buf, _)| Bytes::from_slice(&buf.into_vec()))
+    }).map(|(buf, _)| buf)
 }
 
 // dot-atom        =   [CFWS] dot-atom-text [CFWS]
-pub fn dot_atom<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
+pub fn dot_atom<I: U8Input>(i: I) -> SimpleResult<I, I::Buffer> {
     option(i, cfws, ()).then(|i| {
-        dot_atom_text(i).bind(|i, v| {
+        dot_atom_text(i).bind(|i, buf| {
             option(i, cfws, ()).then(|i| {
-                i.ret(v)
+                i.ret(buf)
             })
         })
     })
@@ -352,7 +351,9 @@ pub fn quoted_string<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
 
 // word            =   atom / quoted-string
 pub fn word<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
-    or(i, atom, quoted_string)
+    or(i, 
+       |i| atom(i).map(|buf| Bytes::from_slice(&buf.into_vec())), 
+       quoted_string)
 }
 //
 // phrase          =   1*word / obs-phrase
@@ -477,7 +478,7 @@ pub fn addr_spec<I: U8Input>(i: I) -> SimpleResult<I, (Bytes, Bytes)> {
 // local-part      =   dot-atom / quoted-string / obs-local-part
 pub fn local_part<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
     or(i,
-       dot_atom,
+       |i| dot_atom(i).map(|buf| Bytes::from_slice(&buf.into_vec())),
        |i| or(i,
               quoted_string,
               obs_local_part))
@@ -486,7 +487,7 @@ pub fn local_part<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
 // domain          =   dot-atom / domain-literal / obs-domain
 // TODO: Support new fields
 pub fn domain<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
-    obs_domain(i)
+    obs_domain(i).map(|buf| Bytes::from_slice(&buf.into_vec()))
 }
 
 // domain-literal  =   [CFWS] "[" *([FWS] dtext) [FWS] "]" [CFWS]
@@ -502,12 +503,12 @@ pub fn message<I: U8Input>(i: I) -> SimpleResult<I, Message> {
     obs_fields(i).bind(|i, f| {
         option(i, |i| {
             crlf(i).then(|i| {
-                body(i)
+                body(i).map(|b| Some(b))
             })
-        }, Bytes::empty()).bind(|i, b| {
+        }, None).bind(|i, b| {
             let message = Message {
                 fields: f,
-                body: b,
+                body: b.map(|buf| Bytes::from_slice(&buf.into_vec())),
             };
             i.ret(message)
         })
@@ -516,7 +517,7 @@ pub fn message<I: U8Input>(i: I) -> SimpleResult<I, Message> {
 
 // body            =   (*(*998text CRLF) *998text) / obs-body
 // TODO: support new fields
-pub fn body<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
+pub fn body<I: U8Input>(i: I) -> SimpleResult<I, I::Buffer> {
     obs_body(i)
 }
 
@@ -758,29 +759,10 @@ pub fn obs_qp<I: U8Input>(i: I) -> SimpleResult<I, u8> {
 }
 
 // obs-body        =   *((*LF *CR *((%d0 / text) *LF *CR)) / CRLF)
-// NOTE: Since all of these variants are optional/repeated fields, the only
-// real constraint is that we need to drop CFWS
-pub fn obs_body<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
-    many(i, |i| {
-        let a = |i| {
-            matched_by(i, |i| {
-                skip_many(i, lf).then(|i| {
-                    skip_many(i, cr).then(|i| {
-                        skip_many(i, |i| token(i, b'0')).then(|i| {
-                            skip_many(i, text)
-                        })
-                    })
-                })
-            }).map(|(buf, ()): (I::Buffer, ())| {
-                Bytes::from_slice(&buf.into_vec())
-            })
-        };
-
-        or(i, a, crlf)
-
-    }).map(|bufs: Vec<Bytes>| {
-        bufs.into_iter().fold(Bytes::empty(), |l, r| l.concat(&r))
-    })
+// NOTE: We're relying on this parser only ever being evaluated after the
+// header delimiter
+pub fn obs_body<I: U8Input>(i: I) -> SimpleResult<I, I::Buffer> {
+    take_remainder(i)
 }
 
 // obs-unstruct    =   *((*LF *CR *(obs-utext *LF *CR)) / FWS)
@@ -966,18 +948,16 @@ pub fn obs_local_part<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
 }
 
 // obs-domain      =   atom *("." atom)
-pub fn obs_domain<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
-    atom(i).bind(|i, a1| {
-        many(i, |i| {
-            token(i, b'.').bind(|i, d_n| {
-                atom(i).bind(|i, a_n| {
-                    i.ret(Bytes::from_slice(&[d_n]).concat(&a_n))
+pub fn obs_domain<I: U8Input>(i: I) -> SimpleResult<I, I::Buffer> {
+    matched_by(i, |i| {
+        atom(i).then(|i| {
+            skip_many(i, |i| {
+                token(i, b'.').then(|i| {
+                    atom(i)
                 })
             })
-        }).map(|bufs: Vec<Bytes>| {
-            bufs.into_iter().fold(a1, |l, r| l.concat(&r))
         })
-    })
+    }).map(|(buf, _)| buf)
 }
 
 // obs-dtext       =   obs-NO-WS-CTL / quoted-pair

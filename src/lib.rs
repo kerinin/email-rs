@@ -45,7 +45,7 @@ pub struct Message {
     // pub from: AddressesField,
     // pub traces: Vec<Trace>,
     pub fields: Vec<Field>,
-    pub body: Bytes,
+    pub body: Option<Bytes>,
 }
 
 /*
