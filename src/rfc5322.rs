@@ -1,6 +1,12 @@
 //! RFC5322 specifies message bodies (supercedes RFC2822)
-//!
 
+use chrono::datetime::DateTime;
+use chrono::offset::LocalResult;
+use chrono::offset::TimeZone;
+use chrono::offset::fixed::FixedOffset;
+use chrono::naive::datetime::NaiveDateTime;
+use chrono::naive::time::NaiveTime;
+use chrono::naive::date::NaiveDate;
 use bytes::{Bytes, ByteStr};
 
 use chomp::types::*;
@@ -8,6 +14,7 @@ use chomp::parsers::*;
 use chomp::combinators::*;
 
 use super::*;
+use super::util::*;
 
 // ALPHA          =  %x41-5A / %x61-7A   ; A-Z / a-z
 // ALPHA          =  %d65-90 / %d97-122  ; A-Z / a-z
@@ -374,36 +381,163 @@ pub fn unstructured<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
 }
 
 // date-time       =   [ day-of-week "," ] date time [CFWS]
-//
+pub fn date_time<I: U8Input>(i: I) -> SimpleResult<I, DateTime<FixedOffset>> {
+    option(i, |i| {
+        day_of_week(i).then(|i| {
+            token(i, b',').then(|i| {
+                i.ret(())
+            })
+        })
+    }, ()).then(|i| {
+        date(i).bind(|i, d| {
+            time(i).bind(|i, (t, o)| {
+                option(i, cfws, ()).then(|i| {
+                    let ndt = NaiveDateTime::new(d, t);
+
+                    match o.from_local_datetime(&ndt) {
+                        LocalResult::Single(dt) => i.ret(dt),
+                        _ => i.err(Error::unexpected()),
+                    }
+                })
+            })
+        })
+    })
+}
+
 // day-of-week     =   ([FWS] day-name) / obs-day-of-week
-//
+pub fn day_of_week<I: U8Input>(i: I) -> SimpleResult<I, Day> {
+    or(i, 
+       |i| option(i, fws, ()).then(day_name),
+       obs_day_of_week)
+}
+
 // day-name        =   "Mon" / "Tue" / "Wed" / "Thu" /
 //                     "Fri" / "Sat" / "Sun"
-//
+pub fn day_name<I: U8Input>(i: I) -> SimpleResult<I, Day> {
+    or(i, |i| string(i, b"Mon").then(|i| i.ret(Day::Mon)),
+    |i| or(i, |i| string(i, b"Tue").then(|i| i.ret(Day::Tue)),
+    |i| or(i, |i| string(i, b"Wed").then(|i| i.ret(Day::Wed)),
+    |i| or(i, |i| string(i, b"Thu").then(|i| i.ret(Day::Thu)),
+    |i| or(i, |i| string(i, b"Fri").then(|i| i.ret(Day::Fri)),
+    |i| or(i, |i| string(i, b"Sat").then(|i| i.ret(Day::Sat)),
+    |i| string(i, b"Sun").then(|i| i.ret(Day::Sun))))))))
+}
+
 // date            =   day month year
-//
+pub fn date<I: U8Input>(i: I) -> SimpleResult<I, NaiveDate> {
+    day(i).bind(|i, d| {
+        month(i).bind(|i, m| {
+            year(i).bind(|i, y| {
+                i.ret(NaiveDate::from_ymd(y as i32, 1 + (m as u32), d as u32))
+            })
+        })
+    })
+}
+
 // day             =   ([FWS] 1*2DIGIT FWS) / obs-day
-//
+pub fn day<I: U8Input>(i: I) -> SimpleResult<I, usize> {
+    or(i,
+       |i| option(i, fws, ()).then(|i| parse_digits(i, (1..3))),
+       obs_day)
+}
+
 // month           =   "Jan" / "Feb" / "Mar" / "Apr" /
 //                     "May" / "Jun" / "Jul" / "Aug" /
 //                     "Sep" / "Oct" / "Nov" / "Dec"
-//
+pub fn month<I: U8Input>(i: I) -> SimpleResult<I, Month> {
+    or(i, |i| string(i, b"Jan").then(|i| i.ret(Month::Jan)),
+    |i| or(i, |i| string(i, b"Feb").then(|i| i.ret(Month::Feb)),
+    |i| or(i, |i| string(i, b"Mar").then(|i| i.ret(Month::Mar)),
+    |i| or(i, |i| string(i, b"Apr").then(|i| i.ret(Month::Apr)),
+    |i| or(i, |i| string(i, b"May").then(|i| i.ret(Month::May)),
+    |i| or(i, |i| string(i, b"Jun").then(|i| i.ret(Month::Jun)),
+    |i| or(i, |i| string(i, b"Jul").then(|i| i.ret(Month::Jul)),
+    |i| or(i, |i| string(i, b"Aug").then(|i| i.ret(Month::Aug)),
+    |i| or(i, |i| string(i, b"Sep").then(|i| i.ret(Month::Sep)),
+    |i| or(i, |i| string(i, b"Oct").then(|i| i.ret(Month::Oct)),
+    |i| or(i, |i| string(i, b"Nov").then(|i| i.ret(Month::Nov)),
+    |i| string(i, b"Dec").then(|i| i.ret(Month::Dec)))))))))))))
+}
+
 // year            =   (FWS 4*DIGIT FWS) / obs-year
-//
+pub fn year<I: U8Input>(i: I) -> SimpleResult<I, usize> {
+    or(i,
+       |i| fws(i).then(|i| parse_digits(i, (4..))),
+       obs_year)
+}
+
 // time            =   time-of-day zone
-//
+pub fn time<I: U8Input>(i: I) -> SimpleResult<I, (NaiveTime, FixedOffset)> {
+    time_of_day(i).bind(|i, t| {
+        zone(i).bind(|i, z| {
+            i.ret((t, z))
+        })
+    })
+}
+
 // time-of-day     =   hour ":" minute [ ":" second ]
-//
+pub fn time_of_day<I: U8Input>(i: I) -> SimpleResult<I, NaiveTime> {
+    hour(i).bind(|i, h| {
+        token(i, b':').then(|i| {
+            minute(i).bind(|i, m| {
+                option(i, |i| {
+                    token(i, b':').then(|i| second(i))
+                }, 0).bind(|i, s| {
+                    i.ret(NaiveTime::from_hms(h as u32, m as u32, s as u32))
+                })
+            })
+        })
+    })
+}
+
 // hour            =   2DIGIT / obs-hour
-//
+pub fn hour<I: U8Input>(i: I) -> SimpleResult<I, usize> {
+    or(i,
+       |i| parse_digits(i, 2),
+       obs_hour)
+}
+
 // minute          =   2DIGIT / obs-minute
-//
+pub fn minute<I: U8Input>(i: I) -> SimpleResult<I, usize> {
+    or(i,
+       |i| parse_digits(i, 2),
+       obs_minute)
+}
+
 // second          =   2DIGIT / obs-second
-//
+pub fn second<I: U8Input>(i: I) -> SimpleResult<I, usize> {
+    or(i,
+       |i| parse_digits(i, 2),
+       obs_second)
+}
+
 // zone            =   (FWS ( "+" / "-" ) 4DIGIT) / obs-zone
-//
+pub fn zone<I: U8Input>(i: I) -> SimpleResult<I, FixedOffset> {
+    or(i,
+       |i| {
+           fws(i).then(|i| {
+               or(i, |i| token(i, b'+'), |i| token(i, b'-')).bind(|i, s| {
+                   parse_digits(i, 2).bind(|i, offset_h: i32| {
+                       parse_digits(i, 2).bind(|i, offset_m: i32| {
+                           let offset = (offset_h * 3600) + (offset_m * 60);
+                           let zone = match s {
+                               b'+' => FixedOffset::east(offset),
+                               _ => FixedOffset::west(offset),
+                           };
+                           i.ret(zone)
+                       })
+                   })
+               })
+           })
+       },
+       obs_zone)
+}
+
 // address         =   mailbox / group
-//
+pub fn address<I: U8Input>(i: I) -> SimpleResult<I, Address> {
+    or(i, mailbox, group)
+}
+
 // mailbox         =   name-addr / addr-spec
 pub fn mailbox<I: U8Input>(i: I) -> SimpleResult<I, Address> {
     or(i,
@@ -452,6 +586,31 @@ pub fn angle_addr<I: U8Input>(i: I) -> SimpleResult<I, (Bytes, Bytes)> {
 }
 
 // group           =   display-name ":" [group-list] ";" [CFWS]
+pub fn group<I: U8Input>(i: I) -> SimpleResult<I, Address> {
+    display_name(i).bind(|i, n| {
+        token(i, b':').then(|i| {
+            option(i, group_list, None).bind(|i, l| {
+                token(i, b';').then(|i| {
+                    option(i, cfws, ()).then(|i| {
+                        let g = if l.is_some() {
+                            Address::Group{
+                                display_name: n,
+                                mailboxes: l.unwrap(),
+                            }
+                        } else {
+                            Address::Group{
+                                display_name: n,
+                                mailboxes: vec!(),
+                            }
+                        };
+                        i.ret(g)
+                    })
+                })
+            })
+        })
+    })
+}
+
 //
 // display-name    =   phrase
 pub fn display_name<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
@@ -459,10 +618,45 @@ pub fn display_name<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
 }
 
 // mailbox-list    =   (mailbox *("," mailbox)) / obs-mbox-list
-//
+pub fn mailbox_list<I: U8Input>(i: I) -> SimpleResult<I, Vec<Address>> {
+    or(i,
+       |i| {
+           mailbox(i).bind(|i, mb1| {
+               many(i, |i| {
+                   token(i, b',').then(mailbox)
+               }).map(|mut mbs: Vec<Address>| {
+                   mbs.insert(0, mb1);
+                   mbs
+               })
+           })
+       },
+       obs_mbox_list)
+}
+
 // address-list    =   (address *("," address)) / obs-addr-list
-//
+pub fn address_list<I: U8Input>(i: I) -> SimpleResult<I, Vec<Address>> {
+    or(i,
+       |i| {
+           address(i).bind(|i, ad1| {
+               many(i, |i| {
+                   token(i, b',').then(address)
+               }).map(|mut ads: Vec<Address>| {
+                   ads.insert(0, ad1);
+                   ads
+               })
+           })
+       },
+       obs_addr_list)
+}
+
 // group-list      =   mailbox-list / CFWS / obs-group-list
+// NOTE: Ignoring obs-group-list, as it appears to be wrong
+pub fn group_list<I: U8Input>(i: I) -> SimpleResult<I, Option<Vec<Address>>> {
+    or(i,
+       |i| mailbox_list(i).map(|v| Some(v)),
+       |i| cfws(i).map(|_| None))
+}
+
 //
 // addr-spec       =   local-part "@" domain
 pub fn addr_spec<I: U8Input>(i: I) -> SimpleResult<I, (Bytes, Bytes)> {
@@ -495,7 +689,43 @@ pub fn domain<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
 // dtext           =   %d33-90 /          ; Printable US-ASCII
 //                     %d94-126 /         ;  characters not including
 //                     obs-dtext          ;  "[", "]", or "\"
+//                     
+//                 =   %d33-90 /          ; Substitute obs-dtext
+//                     %d94-126 /
+//                     obs-NO-WS-CTL /
+//                     quoted-pair
 //
+//                 =   %d1-8 /            ; Substitute obs-NO-WS-CTL, reorganize
+//                     %d11 /
+//                     %d12 /
+//                     %d14-31 /
+//                     %d33-90 /
+//                     %d94-126 /
+//                     %d127 /
+//                     quoted-pair
+// 
+const DTEXT: [bool; 256] = [
+    //  0      1      2      3      4      5      6      7      8      9     10     11     12     13     14     15     16     17     18     19
+    false, true,  true,  true,  true,  true,  true,  true,  true,  false, false, true,  true,  false, true,  true,  true,  true,  true,  true,  //   0 -  19
+    true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  false, true,  true,  true,  true,  true,  true,  true,  //  20 -  39
+    true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  //  40 -  59
+    true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  //  60 -  79
+    true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  false, false, false, true,  true,  true,  true,  true,  true,  //  80 -  99
+    true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  // 100 - 119
+    true,  true,  true,  true,  true,  true,  true,  true,  false, false, false, false, false, false, false, false, false, false, false, false, // 120 - 139
+    false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, // 140 - 159
+    false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, // 160 - 179
+    false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, // 180 - 199
+    false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, // 200 - 219
+    false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, // 220 - 239
+    false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false                              // 240 - 256
+];
+pub fn dtext<I: U8Input>(i: I) -> SimpleResult<I, u8> {
+    or(i,
+       |i| satisfy(i, |c| DTEXT[c as usize]),
+       quoted_pair)
+}
+
 // message         =   (fields / obs-fields)
 //                     [CRLF body]
 // TODO: Support new fields
@@ -628,13 +858,53 @@ pub fn text<I: U8Input>(i: I) -> SimpleResult<I, u8> {
 // references      =   "References:" 1*msg-id CRLF
 //
 // msg-id          =   [CFWS] "<" id-left "@" id-right ">" [CFWS]
-//
+pub fn msg_id<I: U8Input>(i: I) -> SimpleResult<I, MessageID> {
+    option(i, cfws, ()).then(|i| {
+        token(i, b'<').then(|i| {
+            id_left(i).bind(|i, l| {
+                token(i, b'@').then(|i| {
+                    id_right(i).bind(|i, r| {
+                        let message_id = MessageID{
+                            id_left: l,
+                            id_right: r,
+                        };
+                        i.ret(message_id)
+                    })
+                })
+            })
+        })
+    })
+}
+
 // id-left         =   dot-atom-text / obs-id-left
-//
+pub fn id_left<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
+    or(i, 
+       |i| dot_atom_text(i).map(|buf| Bytes::from_slice(&buf.into_vec())), 
+       obs_id_left)
+}
+
 // id-right        =   dot-atom-text / no-fold-literal / obs-id-right
-//
+pub fn id_right<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
+    or(i, 
+       |i| dot_atom_text(i).map(|buf| Bytes::from_slice(&buf.into_vec())), 
+       |i| or(i, 
+              |i| no_fold_literal(i).map(|buf| Bytes::from_slice(&buf.into_vec())),
+              obs_id_right))
+}
+
 // no-fold-literal =   "[" *dtext "]"
-//
+pub fn no_fold_literal<I: U8Input>(i: I) -> SimpleResult<I, I::Buffer> {
+    token(i, b'[').then(|i| {
+        matched_by(i, |i| {
+            skip_many(i, dtext)
+        }).bind(|i, (buf, _)| {
+            token(i, b']').then(|i| {
+                i.ret(buf)
+            })
+        })
+    })
+}
+
 // subject         =   "Subject:" unstructured CRLF
 //
 // comments        =   "Comments:" unstructured CRLF
@@ -855,17 +1125,71 @@ pub fn obs_fws<I: U8Input>(i: I) -> SimpleResult<I, ()> {
 }
 
 // obs-day-of-week =   [CFWS] day-name [CFWS]
-//
+pub fn obs_day_of_week<I: U8Input>(i: I) -> SimpleResult<I, Day> {
+    option(i, cfws, ()).then(|i| {
+        day_name(i).bind(|i, d| {
+            option(i, cfws, ()).then(|i| {
+                i.ret(d)
+            })
+        })
+    })
+}
+
 // obs-day         =   [CFWS] 1*2DIGIT [CFWS]
-//
+pub fn obs_day<I: U8Input>(i: I) -> SimpleResult<I, usize> {
+    option(i, cfws, ()).then(|i| {
+        parse_digits(i, (1..3)).bind(|i, n| {
+            option(i, cfws, ()).then(|i| {
+                i.ret(n)
+            })
+        })
+    })
+}
+
 // obs-year        =   [CFWS] 2*DIGIT [CFWS]
-//
+pub fn obs_year<I: U8Input>(i: I) -> SimpleResult<I, usize> {
+    option(i, cfws, ()).then(|i| {
+        parse_digits(i, (2..4)).bind(|i, n| {
+            option(i, cfws, ()).then(|i| {
+                i.ret(n)
+            })
+        })
+    })
+}
+
 // obs-hour        =   [CFWS] 2DIGIT [CFWS]
-//
+pub fn obs_hour<I: U8Input>(i: I) -> SimpleResult<I, usize> {
+    option(i, cfws, ()).then(|i| {
+        parse_digits(i, 2).bind(|i, n| {
+            option(i, cfws, ()).then(|i| {
+                i.ret(n)
+            })
+        })
+    })
+}
+
 // obs-minute      =   [CFWS] 2DIGIT [CFWS]
-//
+pub fn obs_minute<I: U8Input>(i: I) -> SimpleResult<I, usize> {
+    option(i, cfws, ()).then(|i| {
+        parse_digits(i, 2).bind(|i, n| {
+            option(i, cfws, ()).then(|i| {
+                i.ret(n)
+            })
+        })
+    })
+}
+
 // obs-second      =   [CFWS] 2DIGIT [CFWS]
-//
+pub fn obs_second<I: U8Input>(i: I) -> SimpleResult<I, usize> {
+    option(i, cfws, ()).then(|i| {
+        parse_digits(i, 2).bind(|i, n| {
+            option(i, cfws, ()).then(|i| {
+                i.ret(n)
+            })
+        })
+    })
+}
+
 // obs-zone        =   "UT" / "GMT" /     ; Universal Time
 //                                        ; North American UT
 //                                        ; offsets
@@ -887,7 +1211,25 @@ pub fn obs_fws<I: U8Input>(i: I) -> SimpleResult<I, ()> {
 //    MST is semantically equivalent to -0700
 //    PDT is semantically equivalent to -0700
 //    PST is semantically equivalent to -0800
-//
+pub fn obs_zone<I: U8Input>(i: I) -> SimpleResult<I, FixedOffset> {
+    or(i, |i| string(i, b"UT").then(|i| i.ret(0)),
+    |i| or(i, |i| string(i, b"GMT").then(|i| i.ret(0)),
+    |i| or(i, |i| string(i, b"EST").then(|i| i.ret(-5)),
+    |i| or(i, |i| string(i, b"EDT").then(|i| i.ret(-4)),
+    |i| or(i, |i| string(i, b"CST").then(|i| i.ret(-6)),
+    |i| or(i, |i| string(i, b"CDT").then(|i| i.ret(-5)),
+    |i| or(i, |i| string(i, b"MST").then(|i| i.ret(-7)),
+    |i| or(i, |i| string(i, b"MDT").then(|i| i.ret(-6)),
+    |i| or(i, |i| string(i, b"PST").then(|i| i.ret(-8)),
+    |i| or(i, |i| string(i, b"PDT").then(|i| i.ret(-7)),
+    |i| or(i, |i| satisfy(i, |i| 65 <= i && i <= 73).then(|i| i.ret(0)),
+    |i| or(i, |i| satisfy(i, |i| 75 <= i && i <= 90).then(|i| i.ret(0)),
+    |i| or(i, |i| satisfy(i, |i| 97 <= i && i <= 105).then(|i| i.ret(0)),
+    |i| or(i, |i| satisfy(i, |i| 107 <= i && i <= 122).then(|i| i.ret(0)),
+    |i| skip_many1(i, alpha).then(|i| i.ret(0)),
+    )))))))))))))).map(|o| FixedOffset::west(o))
+}
+
 // obs-angle-addr  =   [CFWS] "<" obs-route addr-spec ">" [CFWS]
 // NOTE: Not supporting because obs-route is stupid
 
@@ -929,11 +1271,64 @@ pub fn obs_domain_list<I: U8Input>(i: I) -> SimpleResult<I, Vec<Bytes>> {
 }
 
 // obs-mbox-list   =   *([CFWS] ",") mailbox *("," [mailbox / CFWS])
-//
+pub fn obs_mbox_list<I: U8Input>(i: I) -> SimpleResult<I, Vec<Address>> {
+    skip_many(i, |i| {
+        option(i, cfws, ()).then(|i| {
+            token(i, b',')
+        })
+    }).then(|i| {
+        mailbox(i).bind(|i, mb1| {
+            many(i, |i| {
+                token(i, b',').then(|i| {
+                    or(i,
+                       |i| mailbox(i).map(|mb| Some(mb)),
+                       |i| option(i, cfws, ()).map(|_| None))
+                })
+            }).map(|maybe_mbs: Vec<Option<Address>>| {
+                let mut mbs = Vec::with_capacity(maybe_mbs.len());
+                mbs.push(mb1);
+                maybe_mbs.into_iter().fold(mbs, |mut l, r| {
+                    if r.is_some() {
+                        l.push(r.unwrap())
+                    }
+                    l
+                })
+            })
+        })
+    })
+}
+
 // obs-addr-list   =   *([CFWS] ",") address *("," [address / CFWS])
-//
+pub fn obs_addr_list<I: U8Input>(i: I) -> SimpleResult<I, Vec<Address>> {
+    skip_many(i, |i| {
+        option(i, cfws, ()).then(|i| {
+            token(i, b',')
+        })
+    }).then(|i| {
+        address(i).bind(|i, ad1| {
+            many(i, |i| {
+                token(i, b',').then(|i| {
+                    or(i,
+                       |i| address(i).map(|v| Some(v)),
+                       |i| cfws(i).map(|_| None))
+                })
+            }).map(|maybe_ads: Vec<Option<Address>>| {
+                let mut ads = Vec::with_capacity(maybe_ads.len());
+                ads.push(ad1);
+                maybe_ads.into_iter().fold(ads, |mut l, r| {
+                    if r.is_some() {
+                        l.push(r.unwrap())
+                    }
+                    l
+                })
+            })
+        })
+    })
+}
+
 // obs-group-list  =   1*([CFWS] ",") [CFWS]
-//
+// NOTE: Pretty sure this is wrong
+
 // obs-local-part  =   word *("." word)
 pub fn obs_local_part<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
     word(i).bind(|i, w1| {
@@ -990,39 +1385,216 @@ pub fn obs_domain<I: U8Input>(i: I) -> SimpleResult<I, I::Buffer> {
 pub fn obs_fields<I: U8Input>(i: I) -> SimpleResult<I, Vec<Field>> {
     // NOTE: REALLY wish the parser macro worked right about here
     many(i, |i| {
-        or(i, 
-           obs_subject,
-           |i| or(i,
-              obs_comments,
-              obs_optional))
+        or(i,       obs_orig_date,
+        |i| or(i,   obs_from,
+        |i| or(i,   obs_sender,
+        |i| or(i,   obs_reply_to,
+        |i| or(i,   obs_to,
+        |i| or(i,   obs_cc,
+        |i| or(i,   obs_message_id,
+        |i| or(i,   obs_in_reply_to,
+        |i| or(i,   obs_references,
+        |i| or(i,   obs_subject,
+        |i| or(i,   obs_comments,
+        // TODO: Should these be Field variants?
+        // |i| or(i,   obs_resent_from,
+        // |i| or(i,   obs_resent_send,
+        // |i| or(i,   obs_resent_date,
+        // |i| or(i,   obs_resent_to,
+        // |i| or(i,   obs_resent_cc,
+        // |i| or(i,   obs_resent_mid,
+        // |i| or(i,   obs_resent_rply,
+                    obs_optional,
+                    )))))))))))
     })
 }
 
 // obs-orig-date   =   "Date" *WSP ":" date-time CRLF
-//
+pub fn obs_orig_date<I: U8Input>(i: I) -> SimpleResult<I, Field> {
+    string(i, b"Date").then(|i| {
+        option(i, wsp, 0).then(|i| {
+            token(i, b':').then(|i| {
+                date_time(i).bind(|i, dt| {
+                    crlf(i).then(|i| {
+                        let value = DateTimeField {date_time: dt};
+
+                        i.ret(Field::Date(value))
+                    })
+                })
+            })
+        })
+    })
+}
+
 // obs-from        =   "From" *WSP ":" mailbox-list CRLF
-//
+pub fn obs_from<I: U8Input>(i: I) -> SimpleResult<I, Field> {
+    string(i, b"From").then(|i| {
+        option(i, wsp, 0).then(|i| {
+            token(i, b':').then(|i| {
+                mailbox_list(i).bind(|i, mbs| {
+                    crlf(i).then(|i| {
+                        let value = AddressesField {addresses: mbs};
+
+                        i.ret(Field::From(value))
+                    })
+                })
+            })
+        })
+    })
+}
+
 // obs-sender      =   "Sender" *WSP ":" mailbox CRLF
-//
+pub fn obs_sender<I: U8Input>(i: I) -> SimpleResult<I, Field> {
+    string(i, b"Sender").then(|i| {
+        option(i, wsp, 0).then(|i| {
+            token(i, b':').then(|i| {
+                mailbox(i).bind(|i, mb| {
+                    crlf(i).then(|i| {
+                        let value = AddressField {address: mb};
+
+                        i.ret(Field::Sender(value))
+                    })
+                })
+            })
+        })
+    })
+}
+
 // obs-reply-to    =   "Reply-To" *WSP ":" address-list CRLF
-//
+pub fn obs_reply_to<I: U8Input>(i: I) -> SimpleResult<I, Field> {
+    string(i, b"Reply-To").then(|i| {
+        option(i, wsp, 0).then(|i| {
+            token(i, b':').then(|i| {
+                address_list(i).bind(|i, mbs| {
+                    crlf(i).then(|i| {
+                        let value = AddressesField {addresses: mbs};
+
+                        i.ret(Field::ReplyTo(value))
+                    })
+                })
+            })
+        })
+    })
+}
+
 // obs-to          =   "To" *WSP ":" address-list CRLF
-//
+pub fn obs_to<I: U8Input>(i: I) -> SimpleResult<I, Field> {
+    string(i, b"To").then(|i| {
+        option(i, wsp, 0).then(|i| {
+            token(i, b':').then(|i| {
+                address_list(i).bind(|i, mbs| {
+                    crlf(i).then(|i| {
+                        let value = AddressesField {addresses: mbs};
+
+                        i.ret(Field::To(value))
+                    })
+                })
+            })
+        })
+    })
+}
+
 // obs-cc          =   "Cc" *WSP ":" address-list CRLF
-//
+pub fn obs_cc<I: U8Input>(i: I) -> SimpleResult<I, Field> {
+    string(i, b"Cc").then(|i| {
+        option(i, wsp, 0).then(|i| {
+            token(i, b':').then(|i| {
+                address_list(i).bind(|i, mbs| {
+                    crlf(i).then(|i| {
+                        let value = AddressesField {addresses: mbs};
+
+                        i.ret(Field::Cc(value))
+                    })
+                })
+            })
+        })
+    })
+}
+
 // obs-bcc         =   "Bcc" *WSP ":"
 //                     (address-list / (*([CFWS] ",") [CFWS])) CRLF
 //
 // obs-message-id  =   "Message-ID" *WSP ":" msg-id CRLF
-//
+pub fn obs_message_id<I: U8Input>(i: I) -> SimpleResult<I, Field> {
+    string(i, b"Message-ID").then(|i| {
+        option(i, wsp, 0).then(|i| {
+            token(i, b':').then(|i| {
+                msg_id(i).bind(|i, m| {
+                    crlf(i).then(|i| {
+                        let value = MessageIDField {message_id: m};
+
+                        i.ret(Field::MessageID(value))
+                    })
+                })
+            })
+        })
+    })
+}
+
 // obs-in-reply-to =   "In-Reply-To" *WSP ":" *(phrase / msg-id) CRLF
-//
+//    For purposes of interpretation, the phrases in the "In-Reply-To:" and
+//    "References:" fields are ignored.
+pub fn obs_in_reply_to<I: U8Input>(i: I) -> SimpleResult<I, Field> {
+    string(i, b"In-Reply-To").then(|i| {
+        option(i, wsp, 0).then(|i| {
+            token(i, b':').then(|i| {
+                many(i, |i| {
+                    or(i, 
+                       |i| phrase(i).map(|_| None),
+                       |i| msg_id(i).map(|v| Some(v)))
+                }).bind(|i, vs: Vec<Option<MessageID>>| {
+                    crlf(i).then(|i| {
+                        let message_ids = vs.into_iter()
+                            .filter(|v| v.is_some())
+                            .map(|v| v.unwrap())
+                            .collect::<Vec<MessageID>>();
+                        let value = MessageIDsField {message_ids: message_ids};
+
+                        i.ret(Field::InReplyTo(value))
+                    })
+                })
+            })
+        })
+    })
+}
+
 // obs-references  =   "References" *WSP ":" *(phrase / msg-id) CRLF
-//
+//    For purposes of interpretation, the phrases in the "In-Reply-To:" and
+//    "References:" fields are ignored.
+pub fn obs_references<I: U8Input>(i: I) -> SimpleResult<I, Field> {
+    string(i, b"In-References").then(|i| {
+        option(i, wsp, 0).then(|i| {
+            token(i, b':').then(|i| {
+                many(i, |i| {
+                    or(i, 
+                       |i| phrase(i).map(|_| None),
+                       |i| msg_id(i).map(|v| Some(v)))
+                }).bind(|i, vs: Vec<Option<MessageID>>| {
+                    crlf(i).then(|i| {
+                        let message_ids = vs.into_iter()
+                            .filter(|v| v.is_some())
+                            .map(|v| v.unwrap())
+                            .collect::<Vec<MessageID>>();
+                        let value = MessageIDsField {message_ids: message_ids};
+
+                        i.ret(Field::References(value))
+                    })
+                })
+            })
+        })
+    })
+}
+
 // obs-id-left     =   local-part
-//
+pub fn obs_id_left<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
+    local_part(i)
+}
+
 // obs-id-right    =   domain
-//
+pub fn obs_id_right<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
+    domain(i)
+}
+
 // obs-subject     =   "Subject" *WSP ":" unstructured CRLF
 pub fn obs_subject<I: U8Input>(i: I) -> SimpleResult<I, Field> {
     string(i, b"Subject").then(|i| {
@@ -1060,22 +1632,127 @@ pub fn obs_comments<I: U8Input>(i: I) -> SimpleResult<I, Field> {
 // obs-keywords    =   "Keywords" *WSP ":" obs-phrase-list CRLF
 //
 // obs-resent-from =   "Resent-From" *WSP ":" mailbox-list CRLF
-//
+pub fn obs_resent_from<I: U8Input>(i: I) -> SimpleResult<I, Resent> {
+    string(i, b"Resent-Cc").then(|i| {
+        option(i, wsp, 0).then(|i| {
+            token(i, b':').then(|i| {
+                mailbox_list(i).bind(|i, mbs| {
+                    crlf(i).then(|i| {
+                        let value = AddressesField {addresses: mbs};
+
+                        i.ret(Resent::Cc(value))
+                    })
+                })
+            })
+        })
+    })
+}
+
 // obs-resent-send =   "Resent-Sender" *WSP ":" mailbox CRLF
-//
+pub fn obs_resent_send<I: U8Input>(i: I) -> SimpleResult<I, Resent> {
+    string(i, b"Resent-Sender").then(|i| {
+        option(i, wsp, 0).then(|i| {
+            token(i, b':').then(|i| {
+                mailbox(i).bind(|i, mb| {
+                    crlf(i).then(|i| {
+                        let value = AddressField {address: mb};
+
+                        i.ret(Resent::Sender(value))
+                    })
+                })
+            })
+        })
+    })
+}
+
 // obs-resent-date =   "Resent-Date" *WSP ":" date-time CRLF
+pub fn obs_resent_date<I: U8Input>(i: I) -> SimpleResult<I, Resent> {
+    string(i, b"Resent-Date").then(|i| {
+        option(i, wsp, 0).then(|i| {
+            token(i, b':').then(|i| {
+                date_time(i).bind(|i, dt| {
+                    crlf(i).then(|i| {
+                        let value = DateTimeField {date_time: dt};
+
+                        i.ret(Resent::Date(value))
+                    })
+                })
+            })
+        })
+    })
+}
 //
 // obs-resent-to   =   "Resent-To" *WSP ":" address-list CRLF
-//
+pub fn obs_resent_to<I: U8Input>(i: I) -> SimpleResult<I, Resent> {
+    string(i, b"Resent-To").then(|i| {
+        option(i, wsp, 0).then(|i| {
+            token(i, b':').then(|i| {
+                address_list(i).bind(|i, mbs| {
+                    crlf(i).then(|i| {
+                        let value = AddressesField {addresses: mbs};
+
+                        i.ret(Resent::To(value))
+                    })
+                })
+            })
+        })
+    })
+}
+
 // obs-resent-cc   =   "Resent-Cc" *WSP ":" address-list CRLF
-//
+pub fn obs_resent_cc<I: U8Input>(i: I) -> SimpleResult<I, Resent> {
+    string(i, b"Resent-Cc").then(|i| {
+        option(i, wsp, 0).then(|i| {
+            token(i, b':').then(|i| {
+                address_list(i).bind(|i, mbs| {
+                    crlf(i).then(|i| {
+                        let value = AddressesField {addresses: mbs};
+
+                        i.ret(Resent::Cc(value))
+                    })
+                })
+            })
+        })
+    })
+}
+
 // obs-resent-bcc  =   "Resent-Bcc" *WSP ":"
 //                     (address-list / (*([CFWS] ",") [CFWS])) CRLF
 //
 // obs-resent-mid  =   "Resent-Message-ID" *WSP ":" msg-id CRLF
-//
+pub fn obs_resent_mid<I: U8Input>(i: I) -> SimpleResult<I, Resent> {
+    string(i, b"Resent-Message-ID").then(|i| {
+        option(i, wsp, 0).then(|i| {
+            token(i, b':').then(|i| {
+                msg_id(i).bind(|i, v| {
+                    crlf(i).then(|i| {
+                        let value = MessageIDField {message_id: v};
+
+                        i.ret(Resent::MessageID(value))
+                    })
+                })
+            })
+        })
+    })
+}
+
 // obs-resent-rply =   "Resent-Reply-To" *WSP ":" address-list CRLF
-//
+pub fn obs_resent_rply<I: U8Input>(i: I) -> SimpleResult<I, Resent> {
+    string(i, b"Resent-Reply-To").then(|i| {
+        option(i, wsp, 0).then(|i| {
+            token(i, b':').then(|i| {
+                address_list(i).bind(|i, mbs| {
+                    crlf(i).then(|i| {
+                        let value = AddressesField {addresses: mbs};
+
+                        i.ret(Resent::ReplyTo(value))
+                    })
+                })
+            })
+        })
+    })
+}
+
 // obs-return      =   "Return-Path" *WSP ":" path CRLF
 //
 // obs-received    =   "Received" *WSP ":" *received-token CRLF

@@ -8,7 +8,7 @@ extern crate bytes;
 
 // pub mod rfc2822;
 pub mod rfc5322;
-// mod util;
+mod util;
 
 use chrono::datetime::DateTime;
 use chrono::offset::fixed::FixedOffset;
@@ -181,6 +181,7 @@ pub enum Resent {
     To(AddressesField),
     Cc(AddressesField),
     Bcc(AddressesField),
+    ReplyTo(AddressesField),
     MessageID(MessageIDField),
 }
 
