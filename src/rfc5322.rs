@@ -264,9 +264,29 @@ pub fn atom<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
 }
 
 // dot-atom-text   =   1*atext *("." 1*atext)
-//
+pub fn dot_atom_text<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
+    matched_by(i, |i| {
+        skip_many1(i, atext).then(|i| {
+            skip_many1(i, |i| {
+                token(i, b'.').then(|i| {
+                    skip_many1(i, atext)
+                })
+            })
+        })
+    }).map(|(buf, _)| Bytes::from_slice(&buf.into_vec()))
+}
+
 // dot-atom        =   [CFWS] dot-atom-text [CFWS]
-//
+pub fn dot_atom<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
+    option(i, cfws, ()).then(|i| {
+        dot_atom_text(i).bind(|i, v| {
+            option(i, cfws, ()).then(|i| {
+                i.ret(v)
+            })
+        })
+    })
+}
+
 // specials        =   "(" / ")" /        ; Special characters that do
 //                     "<" / ">" /        ;  not appear in atext
 //                     "[" / "]" /
@@ -384,12 +404,52 @@ pub fn unstructured<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
 // address         =   mailbox / group
 //
 // mailbox         =   name-addr / addr-spec
-//
+pub fn mailbox<I: U8Input>(i: I) -> SimpleResult<I, Address> {
+    or(i,
+       |i| name_addr(i).map(|(local_part, domain, maybe_display_name)| {
+           Address::Mailbox{
+               local_part: unsafe { String::from_utf8_unchecked(local_part.buf().bytes().to_vec()) },
+               domain: unsafe { String::from_utf8_unchecked(domain.buf().bytes().to_vec()) },
+               display_name: maybe_display_name,
+           }
+       }),
+       |i| addr_spec(i).map(|(local_part, domain)| {
+           Address::Mailbox{
+               local_part: unsafe { String::from_utf8_unchecked(local_part.buf().bytes().to_vec()) },
+               domain: unsafe { String::from_utf8_unchecked(domain.buf().bytes().to_vec()) },
+               display_name: None,
+           }
+       }))
+}
+
 // name-addr       =   [display-name] angle-addr
-//
+pub fn name_addr<I: U8Input>(i: I) -> SimpleResult<I, (Bytes, Bytes, Option<Bytes>)> {
+    option(i, |i| {
+        display_name(i).map(|n| Some(n))
+    }, None).bind(|i, n| {
+        angle_addr(i).bind(|i, (l, d)| {
+            i.ret((l, d, n))
+        })
+    })
+}
+
 // angle-addr      =   [CFWS] "<" addr-spec ">" [CFWS] /
 //                     obs-angle-addr
-//
+// NOTE: Not implementing obs-angle-addr because "routing" is bs
+pub fn angle_addr<I: U8Input>(i: I) -> SimpleResult<I, (Bytes, Bytes)> {
+    option(i, cfws, ()).then(|i| {
+        token(i, b'<').then(|i| {
+            addr_spec(i).bind(|i, (l, d)| {
+                token(i, b'>').then(|i| {
+                    option(i, cfws, ()).then(|i| {
+                        i.ret((l, d))
+                    })
+                })
+            })
+        })
+    })
+}
+
 // group           =   display-name ":" [group-list] ";" [CFWS]
 //
 // display-name    =   phrase
@@ -404,9 +464,25 @@ pub fn display_name<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
 // group-list      =   mailbox-list / CFWS / obs-group-list
 //
 // addr-spec       =   local-part "@" domain
-//
+pub fn addr_spec<I: U8Input>(i: I) -> SimpleResult<I, (Bytes, Bytes)> {
+    local_part(i).bind(|i, l| {
+        token(i, b'@').then(|i| {
+            domain(i).bind(|i, d| {
+                i.ret((l, d))
+            })
+        })
+    })
+}
+
 // local-part      =   dot-atom / quoted-string / obs-local-part
-//
+pub fn local_part<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
+    or(i,
+       dot_atom,
+       |i| or(i,
+              quoted_string,
+              obs_local_part))
+}
+
 // domain          =   dot-atom / domain-literal / obs-domain
 // TODO: Support new fields
 pub fn domain<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
@@ -831,15 +907,10 @@ pub fn obs_fws<I: U8Input>(i: I) -> SimpleResult<I, ()> {
 //    PST is semantically equivalent to -0800
 //
 // obs-angle-addr  =   [CFWS] "<" obs-route addr-spec ">" [CFWS]
-//
+// NOTE: Not supporting because obs-route is stupid
+
 // obs-route       =   obs-domain-list ":"
-pub fn obs_route<I: U8Input>(i: I) -> SimpleResult<I, Vec<Bytes>> { 
-    obs_domain_list(i).bind(|i, l| {
-        token(i, b':').then(|i| {
-            i.ret(l)
-        })
-    })
-}
+// NOTE: Not supporting because why, even?
 
 // obs-domain-list =   *(CFWS / ",") "@" domain
 //                     *("," [CFWS] ["@" domain])
@@ -882,7 +953,18 @@ pub fn obs_domain_list<I: U8Input>(i: I) -> SimpleResult<I, Vec<Bytes>> {
 // obs-group-list  =   1*([CFWS] ",") [CFWS]
 //
 // obs-local-part  =   word *("." word)
-//
+pub fn obs_local_part<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
+    word(i).bind(|i, w1| {
+        many(i, |i| {
+            token(i, b'.').bind(|i, tok| {
+                word(i).map(|buf| Bytes::from_slice(&[tok]).concat(&buf))
+            })
+        }).map(|bufs: Vec<Bytes>| {
+            bufs.into_iter().fold(w1, |l, r| l.concat(&r))
+        })
+    })
+}
+
 // obs-domain      =   atom *("." atom)
 pub fn obs_domain<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
     atom(i).bind(|i, a1| {
