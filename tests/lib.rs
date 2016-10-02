@@ -1,3 +1,4 @@
+/*
 extern crate mail;
 extern crate chomp;
 extern crate chrono;
@@ -340,3 +341,4 @@ fn example_6_3() {
         assert!(!field.is_malformed());
     }
 }
+*/
