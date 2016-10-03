@@ -57,6 +57,12 @@ pub fn cr<I: U8Input + Debug>(i: I) -> SimpleResult<I, u8> {
     satisfy(i, |i| i == 13)
 }
 
+pub fn many_cr<I: U8Input + Debug>(i: I) -> SimpleResult<I, I::Buffer> {
+    matched_by(i, |i| {
+        skip_many(i, cr)
+    }).map(|(buf, _)| buf)
+}
+
 // CRLF           =  CR LF
 //                        ; Internet standard newline
 pub fn crlf<I: U8Input + Debug>(i: I) -> SimpleResult<I, I::Buffer> {
@@ -92,6 +98,12 @@ pub fn htab<I: U8Input + Debug>(i: I) -> SimpleResult<I, u8> {
 //                        ; linefeed
 pub fn lf<I: U8Input + Debug>(i: I) -> SimpleResult<I, u8> {
     satisfy(i, |i| i == 10)
+}
+
+pub fn many_lf<I: U8Input + Debug>(i: I) -> SimpleResult<I, I::Buffer> {
+    matched_by(i, |i| {
+        skip_many(i, lf)
+    }).map(|(buf, _)| buf)
 }
 
 // LWSP           =  *(WSP / CRLF WSP)
@@ -499,6 +511,7 @@ fn test_phrase() {
 // unstructured    =   (*([FWS] VCHAR) *WSP) / obs-unstruct
 // TODO: parse new version
 pub fn unstructured<I: U8Input + Debug>(i: I) -> SimpleResult<I, Bytes> {
+    println!("unstructured {:?}", i);
     obs_unstruct(i)
 }
 
@@ -1141,6 +1154,7 @@ pub fn dtext<I: U8Input + Debug>(i: I) -> SimpleResult<I, u8> {
 //                     [CRLF body]
 // TODO: Support new fields
 pub fn message<I: U8Input + Debug>(i: I) -> SimpleResult<I, Message> {
+    println!("message: {:?}", i);
     obs_fields(i).bind(|i, f| {
         option(i, |i| {
             crlf(i).then(|i| {
@@ -1355,6 +1369,7 @@ pub fn no_fold_literal<I: U8Input + Debug>(i: I) -> SimpleResult<I, I::Buffer> {
 //
 // field-name      =   1*ftext
 pub fn field_name<I: U8Input + Debug>(i: I) -> SimpleResult<I, I::Buffer> {
+    println!("field-name {:?}", i);
 	matched_by(i, |i| {
         skip_many1(i, ftext)
 	}).map(|(buf, ())| {
@@ -1421,10 +1436,23 @@ pub fn obs_qtext<I: U8Input + Debug>(i: I) -> SimpleResult<I, u8> {
 }
 
 // obs-utext       =   %d0 / obs-NO-WS-CTL / VCHAR
+//                 =   %d0 /
+//                     %d1-8 /
+//                     %d11 /
+//                     %d12 /
+//                     %d14-31 /
+//                     %d33-126 /
+//                     %d127
 pub fn obs_utext<I: U8Input + Debug>(i: I) -> SimpleResult<I, u8> {
 	or(i, 
        |i| satisfy(i, |i| i == 0),
        |i| or(i, obs_no_ws_ctl, vchar))
+}
+
+pub fn many1_obs_utext<I: U8Input + Debug>(i: I) -> SimpleResult<I, I::Buffer> {
+    matched_by(i, |i| {
+        skip_many1(i, obs_utext)
+    }).map(|(buf, _)| buf)
 }
 
 // obs-qp          =   "\" (%d0 / obs-NO-WS-CTL / LF / CR)
@@ -1451,31 +1479,40 @@ pub fn obs_body<I: U8Input + Debug>(i: I) -> SimpleResult<I, I::Buffer> {
 }
 
 // obs-unstruct    =   *((*LF *CR *(obs-utext *LF *CR)) / FWS)
-// NOTE: Since all of these variants are optional/repeated fields, the only
-// real constraint is that we need to drop FWS
+// NOTE: This parses as an infinite loop (empty match doesn't consume input, so
+// wrapping it in a many causes a cycle), so this implements the following
+//                 =   *((*LF *CR 1*(obs-utext *LF *CR)) / FWS)
+// TODO: The trailing *CR can accidentally consume the first token of a CRLF,
+// so we need to either prevent this from doing so or find a way of communicating
+// the fact it was done
 pub fn obs_unstruct<I: U8Input + Debug>(i: I) -> SimpleResult<I, Bytes> {
+    println!("obs_unstruct {:?}", i);
     many(i, |i| {
-        let a = |i| {
-            matched_by(i, |i| {
-                skip_many(i, lf).then(|i| {
-                    skip_many(i, cr).then(|i| {
-                        skip_many(i, obs_utext)
-                    })
-                })
-            }).map(|(buf, ()): (I::Buffer, ())| {
-                let slice = buf.into_vec();
-                Bytes::from_slice(&slice)
-            })
-        };
-
-        let b = |i| {
-            fws(i).map(|_| Bytes::empty())
-        };
-
-        or(i, a, b)
-
-    }).map(|bufs: Vec<Bytes>| {
-        bufs.into_iter().fold(Bytes::empty(), |l, r| l.concat(&r))
+        or(i, 
+           |i| {
+               matched_by(i, |i| {
+                   println!("obs_unstruct.matched_by {:?}", i);
+                   skip_many(i, lf).then(|i| {
+                       println!("obs_unstruct.skip_many(lf1) {:?}", i);
+                       skip_many(i, cr).then(|i| {
+                           println!("obs_unstruct.skip_many(cr1) {:?}", i);
+                           skip_many1(i, |i| {
+                               println!("obs_unstruct.skip_many1(obs-utext *lf *cr) {:?}", i);
+                               skip_many1(i, obs_utext).then(|i| {
+                                   println!("obs_unstruct.skip_many1(obs-utext) {:?}", i);
+                                   skip_many(i, lf).then(|i| {
+                                       println!("obs_unstruct.skip_many(lfn) {:?}", i);
+                                       skip_many(i, cr)
+                                   })
+                               })
+                           })
+                       })
+                   })
+               }).map(|(buf, _)| Bytes::from_slice(&buf.into_vec()))
+           },
+           fws)
+    }).map(|vs: Vec<Bytes>| {
+        vs.into_iter().fold(Bytes::empty(), |l, r| l.concat(&r))
     })
 }
 
@@ -1859,11 +1896,17 @@ pub fn obs_fields<I: U8Input + Debug>(i: I) -> SimpleResult<I, Vec<Field>> {
 
 // obs-orig-date   =   "Date" *WSP ":" date-time CRLF
 pub fn obs_orig_date<I: U8Input + Debug>(i: I) -> SimpleResult<I, Field> {
+    println!("obs-orig-date {:?}", i);
     string(i, b"Date").then(|i| {
+        println!("obs-orig-date.string(Date) {:?}", i);
         option(i, wsp, 0).then(|i| {
+            println!("obs-orig-date.wsp {:?}", i);
             token(i, b':').then(|i| {
+                println!("obs-orig-date.token(:) {:?}", i);
                 date_time(i).bind(|i, dt| {
+                    println!("obs-orig-date.date-time {:?}", i);
                     crlf(i).then(|i| {
+                        println!("obs-orig-date.crlf {:?}", i);
                         let value = DateTimeField {date_time: dt};
 
                         i.ret(Field::Date(value))
@@ -1874,13 +1917,27 @@ pub fn obs_orig_date<I: U8Input + Debug>(i: I) -> SimpleResult<I, Field> {
     })
 }
 
+#[test]
+fn test_obs_orig_date() {
+    let i = b"Date: Fri, 21 Nov 1997 09:55:06 -0600\x0d\x0a";
+    let msg = parse_only(obs_orig_date, i);
+    assert!(msg.is_ok());
+    println!("parsed date: {:?}", msg.unwrap());
+}
+
 // obs-from        =   "From" *WSP ":" mailbox-list CRLF
 pub fn obs_from<I: U8Input + Debug>(i: I) -> SimpleResult<I, Field> {
+    println!("from {:?}", i);
     string(i, b"From").then(|i| {
+        println!("from.string {:?}", i);
         option(i, wsp, 0).then(|i| {
+            println!("from.wsp {:?}", i);
             token(i, b':').then(|i| {
+                println!("from.token {:?}", i);
                 mailbox_list(i).bind(|i, mbs| {
+                    println!("from.mailbox_list {:?}", i);
                     crlf(i).then(|i| {
+                        println!("from.crlf {:?}", i);
                         let value = AddressesField {addresses: mbs};
 
                         i.ret(Field::From(value))
@@ -1889,6 +1946,14 @@ pub fn obs_from<I: U8Input + Debug>(i: I) -> SimpleResult<I, Field> {
             })
         })
     })
+}
+
+#[test]
+fn test_obs_from() {
+    let i = b"From: John Doe <jdoe@machine.example>\x0d\x0a";
+    let msg = parse_only(obs_from, i);
+    assert!(msg.is_ok());
+    println!("parsed from: {:?}", msg.unwrap());
 }
 
 // obs-sender      =   "Sender" *WSP ":" mailbox CRLF
@@ -1942,6 +2007,14 @@ pub fn obs_to<I: U8Input + Debug>(i: I) -> SimpleResult<I, Field> {
     })
 }
 
+#[test]
+fn test_obs_to() {
+    let i = b"To: Mary Smith <mary@example.net>\x0d\x0a";
+    let msg = parse_only(obs_to, i);
+    assert!(msg.is_ok());
+    println!("parsed to: {:?}", msg.unwrap());
+}
+
 // obs-cc          =   "Cc" *WSP ":" address-list CRLF
 pub fn obs_cc<I: U8Input + Debug>(i: I) -> SimpleResult<I, Field> {
     string(i, b"Cc").then(|i| {
@@ -1977,6 +2050,14 @@ pub fn obs_message_id<I: U8Input + Debug>(i: I) -> SimpleResult<I, Field> {
             })
         })
     })
+}
+
+#[test]
+fn test_obs_message_id() {
+    let i = b"Message-ID: <1234@local.machine.example>\x0d\x0a";
+    let msg = parse_only(obs_message_id, i);
+    assert!(msg.is_ok());
+    println!("parsed message-id: {:?}", msg.unwrap());
 }
 
 // obs-in-reply-to =   "In-Reply-To" *WSP ":" *(phrase / msg-id) CRLF
@@ -2045,11 +2126,17 @@ pub fn obs_id_right<I: U8Input + Debug>(i: I) -> SimpleResult<I, Bytes> {
 
 // obs-subject     =   "Subject" *WSP ":" unstructured CRLF
 pub fn obs_subject<I: U8Input + Debug>(i: I) -> SimpleResult<I, Field> {
+    println!("subject {:?}", i);
     string(i, b"Subject").then(|i| {
+        println!("subject.string {:?}", i);
         option(i, wsp, 0).then(|i| {
+            println!("subject.wsp {:?}", i);
             token(i, b':').then(|i| {
+                println!("subject.token {:?}", i);
                 unstructured(i).bind(|i, v| {
+                    println!("subject.unstructured {:?}", i);
                     crlf(i).then(|i| {
+                        println!("subject.crlf {:?}", i);
                         let value = UnstructuredField {data: v};
 
                         i.ret(Field::Subject(value))
@@ -2059,6 +2146,15 @@ pub fn obs_subject<I: U8Input + Debug>(i: I) -> SimpleResult<I, Field> {
         })
     })
 }
+
+#[test]
+fn test_obs_subject() {
+    let i = b"Subject: Saying Hello\x0d\x0a";
+    let msg = parse_only(obs_subject, i);
+    assert!(msg.is_ok());
+    println!("parsed subject: {:?}", msg.unwrap());
+}
+
 
 // obs-comments    =   "Comments" *WSP ":" unstructured CRLF
 pub fn obs_comments<I: U8Input + Debug>(i: I) -> SimpleResult<I, Field> {
@@ -2207,10 +2303,15 @@ pub fn obs_resent_rply<I: U8Input + Debug>(i: I) -> SimpleResult<I, Resent> {
 //
 // obs-optional    =   field-name *WSP ":" unstructured CRLF
 pub fn obs_optional<I: U8Input + Debug>(i: I) -> SimpleResult<I, Field> {
+    println!("obs_optional {:?}", i);
     field_name(i).bind(|i, n| {
+        println!("obs_optional.field-name {:?}", i);
         option(i, wsp, 0).then(|i| {
+            println!("obs_optional.wsp {:?}", i);
             token(i, b':').then(|i| {
+                println!("obs_optional.token {:?}", i);
                 unstructured(i).bind(|i, v| {
+                    println!("obs_optional.unstructured {:?}", i);
                     crlf(i).then(|i| {
                         // NOTE: `field-name` is "printable US-ASCII characters not including ':'"
                         let name = unsafe { String::from_utf8_unchecked(n.into_vec()) };
