@@ -1513,40 +1513,85 @@ pub fn obs_body<I: U8Input + Debug>(i: I) -> SimpleResult<I, I::Buffer> {
 }
 
 // obs-unstruct    =   *((*LF *CR *(obs-utext *LF *CR)) / FWS)
-// NOTE: This parses as an infinite loop (empty match doesn't consume input, so
-// wrapping it in a many causes a cycle), so this implements the following
-//                 =   *((*LF *CR 1*(obs-utext *LF *CR)) / FWS)
-// TODO: The trailing *CR can accidentally consume the first token of a CRLF,
-// so we need to either prevent this from doing so or find a way of communicating
-// the fact it was done
+//
+// NOTE: The potentially matches a trailing CR which "should" be interpreted
+// as the first byte of a CRLF.  To allow handling this case we return a wrapped
+// value indicating if the terminal byte was a CR
+//
+// (LF / CR / obs-utext) =        
+//                     %d0 /
+//                     %d1-8 /
+//                     %d10 /
+//                     %d11 /
+//                     %d12 /
+//                     %d13 /
+//                     %d14-31 /
+//                     %d33-126 /
+//                     %d127
+const OBS_UNSTRUCT: [bool; 256] = [
+    //  0      1      2      3      4      5      6      7      8      9     10     11     12     13     14     15     16     17     18     19
+    true,  true,  true,  true,  true,  true,  true,  true,  true,  false, true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  //   0 -  19
+    true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  false, true,  true,  true,  true,  true,  true,  true,  //  20 -  39
+    true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  //  40 -  59
+    true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  //  60 -  79
+    true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  //  80 -  99
+    true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  // 100 - 119
+    true,  true,  true,  true,  true,  true,  true,  true,  false, false, false, false, false, false, false, false, false, false, false, false, // 120 - 139
+    false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, // 140 - 159
+    false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, // 160 - 179
+    false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, // 180 - 199
+    false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, // 200 - 219
+    false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, // 220 - 239
+    false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false                              // 240 - 256
+];
 pub fn obs_unstruct<I: U8Input + Debug>(i: I) -> SimpleResult<I, Bytes> {
-    println!("obs_unstruct {:?}", i);
     many(i, |i| {
-        or(i, 
+        or(i,
            |i| {
-               matched_by(i, |i| {
-                   println!("obs_unstruct.matched_by {:?}", i);
-                   skip_many(i, lf).then(|i| {
-                       println!("obs_unstruct.skip_many(lf1) {:?}", i);
-                       skip_many(i, cr).then(|i| {
-                           println!("obs_unstruct.skip_many(cr1) {:?}", i);
-                           skip_many1(i, |i| {
-                               println!("obs_unstruct.skip_many1(obs-utext *lf *cr) {:?}", i);
-                               skip_many1(i, obs_utext).then(|i| {
-                                   println!("obs_unstruct.skip_many1(obs-utext) {:?}", i);
-                                   skip_many(i, lf).then(|i| {
-                                       println!("obs_unstruct.skip_many(lfn) {:?}", i);
-                                       skip_many(i, cr)
-                                   })
-                               })
-                           })
-                       })
-                   })
-               }).map(|(buf, _)| Bytes::from_slice(&buf.into_vec()))
+               scan(i, None, |last_byte: Option<u8>, token: u8| {
+                   if !OBS_UNSTRUCT[token as usize] {
+                       return None
+                   }
+                   if last_byte == Some(13) && token == 10 {
+                       // Avoid CRLF
+                       return None
+                   }
+                   return Some(Some(token))
+               }).map(|buf| Bytes::from_slice(&buf.into_vec()))
            },
            fws)
-    }).map(|vs: Vec<Bytes>| {
-        vs.into_iter().fold(Bytes::empty(), |l, r| l.concat(&r))
+    }).map(|parts: Vec<Bytes>| {
+        parts.into_iter().fold(Bytes::empty(), |l, r| l.concat(&r))
+    })
+}
+pub fn obs_unstruct_suffix<I: U8Input + Debug>(i: I) -> SimpleResult<I, (Bytes, Option<u8>)> {
+    many(i, |i| {
+        or(i,
+           |i| {
+               run_scanner(i, None, |last_byte: Option<u8>, token: u8| {
+                   if !OBS_UNSTRUCT[token as usize] {
+                       return None
+                   }
+                   if last_byte == Some(13) && token == 10 {
+                       // Avoid CRLF
+                       return None
+                   }
+                   return Some(Some(token))
+
+               }).bind(|i, (buf, t)| {
+                   match t {
+                       None => i.err(Error::unexpected()),
+                       Some(last_token) => {
+                           i.ret((Bytes::from_slice(&buf.into_vec()), last_token))
+                       },
+                   }
+               })
+           },
+           fws_suffix)
+    }).map(|parts: Vec<(Bytes, u8)>| {
+        parts.into_iter().fold((Bytes::empty(), None), |(l, _), (r, last_token)| {
+            (l.concat(&r), Some(last_token))
+        })
     })
 }
 
