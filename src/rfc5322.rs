@@ -1,4 +1,5 @@
 //! RFC5322 specifies message bodies (supercedes RFC2822)
+//! obs_unstruct
 
 use std::fmt::Debug;
 
@@ -190,6 +191,39 @@ pub fn fws<I: U8Input + Debug>(i: I) -> SimpleResult<I, Bytes> {
            })
        },
        obs_fws)
+}
+pub fn fws_suffix<I: U8Input + Debug>(i: I) -> SimpleResult<I, (Bytes, u8)> {
+    or(i, 
+       |i| {
+           option(i, |i| {
+               matched_by(i, |i| {
+                   skip_many(i, wsp)
+               }).bind(|i, (buf1, _)| {
+                   crlf(i).then(|i| {
+                       i.ret(Bytes::from_slice(&buf1.into_vec()))
+                   })
+               })
+           }, Bytes::empty()).bind(|i, bytes_1| {
+               run_scanner(i, None, |last_token: Option<u8>, token: u8| {
+                   if token == 32 || token == 9 {
+                       Some(Some(token))
+                   } else {
+                       None
+                   }
+               }).bind(|i, (buf, t)| {
+                   match t {
+                       None => i.err(Error::unexpected()),
+                       Some(last_token) => {
+                           let bytes_n = Bytes::from_slice(&buf.into_vec());
+
+                           i.ret((bytes_1.concat(&bytes_n), last_token))
+                       },
+                   }
+               })
+
+           })
+       },
+       obs_fws_suffix)
 }
 
 // ctext           =   %d33-39 /          ; Printable US-ASCII
@@ -1595,6 +1629,45 @@ pub fn obs_fws<I: U8Input + Debug>(i: I) -> SimpleResult<I, Bytes> {
         }).map(|bufs: Vec<Bytes>| {
             bufs.into_iter().fold(Bytes::from_slice(&buf1.into_vec()), |l, r| l.concat(&r))
         })
+    })
+}
+pub fn obs_fws_suffix<I: U8Input + Debug>(i: I) -> SimpleResult<I, (Bytes, u8)> {
+    run_scanner(i, None, |last_token: Option<u8>, token: u8| {
+        // WSP = SP / HTAB = %d32 / %d09
+        if token == 32 || token == 9 {
+            Some(Some(token))
+        } else {
+            None
+        }
+    }).bind(|i, (previous_buf, t)| {
+        match t {
+            None => i.err(Error::unexpected()),
+            Some(previous_last_token) => {
+                many(i, |i| {
+                    crlf(i).then(|i| {
+                        run_scanner(i, None, |last_token: Option<u8>, token: u8| {
+                            if token == 32 || token == 9 {
+                                Some(Some(token))
+                            } else {
+                                None
+                            }
+                        }).bind(|i, (buf, t)| {
+                            match t {
+                                None => i.err(Error::unexpected()),
+                                Some(last_token) => i.ret((Bytes::from_slice(&buf.into_vec()), last_token)),
+                            }
+                        })
+                    })
+                }).bind(|i, wsps: Vec<(Bytes, u8)>| {
+                    let init = (Bytes::from_slice(&previous_buf.into_vec()), previous_last_token);
+                    let f = wsps.into_iter().fold(init, |(l, _), (r, last_token)| {
+                        (l.concat(&r), last_token)
+                    });
+
+                    i.ret(f)
+                })
+            },
+        }
     })
 }
 
