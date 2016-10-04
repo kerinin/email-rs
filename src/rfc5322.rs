@@ -548,6 +548,10 @@ pub fn unstructured<I: U8Input + Debug>(i: I) -> SimpleResult<I, Bytes> {
     println!("unstructured {:?}", i);
     obs_unstruct(i)
 }
+pub fn unstructured_suffix<I: U8Input + Debug>(i: I) -> SimpleResult<I, (Bytes, Option<u8>)> {
+    println!("unstructured_suffix {:?}", i);
+    obs_unstruct_suffix(i)
+}
 
 // date-time       =   [ day-of-week "," ] date time [CFWS]
 pub fn date_time<I: U8Input + Debug>(i: I) -> SimpleResult<I, DateTime<FixedOffset>> {
