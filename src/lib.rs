@@ -181,12 +181,6 @@ pub struct Trace {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct ReceivedField {
-    pub date_time: DateTime<FixedOffset>,
-    pub tokens: Vec<Bytes>,
-}
-
-#[derive(Clone, Debug, PartialEq)]
 pub enum Field {
     Date(DateTimeField),
     From(AddressesField),
@@ -212,6 +206,12 @@ pub enum Field {
     ResentReplyTo(AddressesField),
     ResentMessageID(MessageIDField),
     Optional(String, UnstructuredField),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct ReceivedField {
+    pub date_time: DateTime<FixedOffset>,
+    pub tokens: Vec<Bytes>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
