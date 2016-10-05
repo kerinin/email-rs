@@ -81,5 +81,29 @@ fn test_lazy_take_while() {
     let msg = parse_only(parser, i);
     println!("parsed: {:?}", msg);
     assert!(msg.is_ok());
-    // assert_eq!(msg.unwrap(), (&b"a"[..], &b"bc"[..]));
+
+    let i = b"abcde";
+    let parser = |i| {
+        lazy_take_while(i, |_| true, |i| string(i, b"bc"))
+    };
+    let msg = parse_only(parser, i);
+    println!("parsed: {:?}", msg);
+    assert!(msg.is_ok());
+    assert_eq!(msg.unwrap(), (&b"a"[..], &b"bc"[..]));
+    
+    let i = b"aaa";
+    let parser = |i| {
+        lazy_take_while(i, |_| true, |i| string(i, b"bc")).then(|i| eof(i))
+    };
+    let msg = parse_only(parser, i);
+    println!("parsed: {:?}", msg);
+    assert!(!msg.is_ok());
+
+    let i = b"";
+    let parser = |i| {
+        lazy_take_while(i, |_| true, |i| string(i, b"bc")).then(|i| eof(i))
+    };
+    let msg = parse_only(parser, i);
+    println!("parsed: {:?}", msg);
+    assert!(!msg.is_ok());
 }
