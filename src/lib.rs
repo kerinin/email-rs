@@ -47,6 +47,15 @@ pub struct Message {
 }
 
 impl Message {
+    pub fn from<'a>(&'a self) -> Option<&'a AddressesField> {
+        self.fields.iter().filter_map(|i| {
+            match i {
+                &Field::From(ref f) => Some(f),
+                _ => None,
+            }
+        }).next()
+    }
+
     pub fn date<'a>(&'a self) -> Option<&'a DateTimeField> {
         self.fields.iter().filter_map(|i| {
             match i {

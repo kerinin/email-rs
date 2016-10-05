@@ -23,43 +23,43 @@ fn example_1_1_1() {
         assert!(!field.is_unstructured());
         assert!(!field.is_malformed());
     }
-    //
-    // println!("--> msg: {:?}", email);
-    // let date = DateTimeField{
-    //     date_time: FixedOffset::east(-6*3600).ymd(1997, 11, 21).and_hms(9,55,6),
-    // };
-    // assert_eq!(email.date(), Some(&date));
-    //
-    // let from = AddressesField{
-    //     addresses: vec!(Address::Mailbox{
-    //         local_part: "jdoe".to_string(),
-    //         domain: "machine.example".to_string(),
-    //         display_name: Some(Bytes::from_slice(b" John Doe ")),
-    //     }),
-    // };
-    // assert_eq!(email.from, from);
-    //
-    // let to = AddressesField{
-    //     addresses: vec!(Address::Mailbox{
-    //         local_part: "mary".to_string(),
-    //         domain: "example.net".to_string(),
-    //         display_name: Some(Bytes::from_slice(b" Mary Smith ")),
-    //     }),
-    // };
-    // assert_eq!(email.to(), Some(&to));
-    //
-    // let subj = UnstructuredField{
-    //     data: Bytes::from_slice(b" Saying Hello"),
-    // };
-    // assert_eq!(email.subject(), Some(&subj));
-    //
-    // let msgid = MessageIDField{
-    //     message_id: MessageID{
-    //         id_left: Bytes::from_slice(b"1234"),
-    //         id_right: Bytes::from_slice(b"local.machine.example"),
-    //     },
-    // };
-    // assert_eq!(email.message_id(), Some(&msgid));
+
+    println!("--> msg: {:?}", email);
+    let date = DateTimeField{
+        date_time: FixedOffset::east(-6*3600).ymd(1997, 11, 21).and_hms(9,55,6),
+    };
+    assert_eq!(email.date(), Some(&date));
+
+    let from = AddressesField{
+        addresses: vec!(Address::Mailbox{
+            local_part: "jdoe".to_string(),
+            domain: "machine.example".to_string(),
+            display_name: Some(Bytes::from_slice(b" John Doe ")),
+        }),
+    };
+    assert_eq!(email.from(), Some(&from));
+
+    let to = AddressesField{
+        addresses: vec!(Address::Mailbox{
+            local_part: "mary".to_string(),
+            domain: "example.net".to_string(),
+            display_name: Some(Bytes::from_slice(b" Mary Smith ")),
+        }),
+    };
+    assert_eq!(email.to(), Some(&to));
+
+    let subj = UnstructuredField{
+        data: Bytes::from_slice(b" Saying Hello"),
+    };
+    assert_eq!(email.subject(), Some(&subj));
+
+    let msgid = MessageIDField{
+        message_id: MessageID{
+            id_left: Bytes::from_slice(b"1234"),
+            id_right: Bytes::from_slice(b"local.machine.example"),
+        },
+    };
+    assert_eq!(email.message_id(), Some(&msgid));
 }
 
 #[test]
@@ -75,50 +75,50 @@ fn example_1_1_2() {
         assert!(!field.is_malformed());
     }
 
-    // let date = DateTimeField{
-    //     date_time: FixedOffset::east(-6*3600).ymd(1997, 11, 21).and_hms(9,55,6),
-    // };
-    // assert_eq!(email.date, date);
-    //
-    // let from = AddressesField{
-    //     addresses: vec!(Address::Mailbox{
-    //         local_part: "jdoe".to_string(),
-    //         domain: "machine.example".to_string(),
-    //         display_name: Some(Bytes::from_slice(b" John Doe ")),
-    //     }),
-    // };
-    // assert_eq!(email.from, from);
-    //
-    // let sender = AddressField{
-    //     address: Address::Mailbox{
-    //         local_part: "mjones".to_string(),
-    //         domain: "machine.example".to_string(),
-    //         display_name: Some(Bytes::from_slice(b" Michael Jones ")),
-    //     },
-    // };
-    // assert_eq!(email.sender(), Some(&sender));
-    //
-    // let to = AddressesField{
-    //     addresses: vec!(Address::Mailbox{
-    //         local_part: "mary".to_string(),
-    //         domain: "example.net".to_string(),
-    //         display_name: Some(Bytes::from_slice(b" Mary Smith ")),
-    //     }),
-    // };
-    // assert_eq!(email.to(), Some(&to));
-    //
-    // let subj = UnstructuredField{
-    //     data: Bytes::from_slice(b" Saying Hello"),
-    // };
-    // assert_eq!(email.subject(), Some(&subj));
-    //
-    // let msgid = MessageIDField{
-    //     message_id: MessageID{
-    //         id_left: Bytes::from_slice(b"1234"),
-    //         id_right: Bytes::from_slice(b"local.machine.example"),
-    //     },
-    // };
-    // assert_eq!(email.message_id(), Some(&msgid));
+    let date = DateTimeField{
+        date_time: FixedOffset::east(-6*3600).ymd(1997, 11, 21).and_hms(9,55,6),
+    };
+    assert_eq!(email.date(), Some(&date));
+
+    let from = AddressesField{
+        addresses: vec!(Address::Mailbox{
+            local_part: "jdoe".to_string(),
+            domain: "machine.example".to_string(),
+            display_name: Some(Bytes::from_slice(b" John Doe ")),
+        }),
+    };
+    assert_eq!(email.from(), Some(&from));
+
+    let sender = AddressField{
+        address: Address::Mailbox{
+            local_part: "mjones".to_string(),
+            domain: "machine.example".to_string(),
+            display_name: Some(Bytes::from_slice(b" Michael Jones ")),
+        },
+    };
+    assert_eq!(email.sender(), Some(&sender));
+
+    let to = AddressesField{
+        addresses: vec!(Address::Mailbox{
+            local_part: "mary".to_string(),
+            domain: "example.net".to_string(),
+            display_name: Some(Bytes::from_slice(b" Mary Smith ")),
+        }),
+    };
+    assert_eq!(email.to(), Some(&to));
+
+    let subj = UnstructuredField{
+        data: Bytes::from_slice(b" Saying Hello"),
+    };
+    assert_eq!(email.subject(), Some(&subj));
+
+    let msgid = MessageIDField{
+        message_id: MessageID{
+            id_left: Bytes::from_slice(b"1234"),
+            id_right: Bytes::from_slice(b"local.machine.example"),
+        },
+    };
+    assert_eq!(email.message_id(), Some(&msgid));
 }
 
 #[test]
@@ -134,11 +134,11 @@ fn example_1_2() {
         assert!(!field.is_malformed());
     }
 
-    // let date = DateTimeField{
-    //     date_time: FixedOffset::east(2*3600).ymd(2003, 7, 1).and_hms(10,52,37),
-    // };
-    // assert_eq!(email.date, date);
-    //
+    let date = DateTimeField{
+        date_time: FixedOffset::east(2*3600).ymd(2003, 7, 1).and_hms(10,52,37),
+    };
+    assert_eq!(email.date(), Some(&date));
+
     // let from = AddressesField{
     //     addresses: vec!(Address::Mailbox{
     //         local_part: "john.q.public".to_string(),
@@ -146,7 +146,7 @@ fn example_1_2() {
     //         display_name: Some(Bytes::from_slice(b" Joe Q. Public ")),
     //     }),
     // };
-    // assert_eq!(email.from, from);
+    // assert_eq!(email.from(), Some(&from));
     //
     // let to = AddressesField{
     //     addresses: vec!(
