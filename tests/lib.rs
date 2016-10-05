@@ -1,4 +1,3 @@
-/*
 extern crate mail;
 extern crate chomp;
 extern crate chrono;
@@ -20,10 +19,10 @@ fn example_1_1_1() {
     assert!(msg.is_ok());
     let email = msg.unwrap();
     println!("--> msg: {:?}", email);
-    // for field in email.fields.iter() {
-    //     assert!(!field.is_unstructured());
-    //     assert!(!field.is_malformed());
-    // }
+    for field in email.fields.iter() {
+        assert!(!field.is_unstructured());
+        assert!(!field.is_malformed());
+    }
     //
     // println!("--> msg: {:?}", email);
     // let date = DateTimeField{
@@ -208,6 +207,7 @@ fn example_1_3() {
     }
 }
 
+/*
 #[test]
 fn example_2_1() {
     let raw = include_bytes!("example_2.1.eml");

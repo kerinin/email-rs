@@ -2180,7 +2180,6 @@ pub fn obs_subject<I: U8Input + Debug>(i: I) -> SimpleResult<I, Field> {
     })
 }
 
-/*
 #[test]
 fn test_obs_subject() {
     let i = b"Subject: Saying Hello\x0d\x0a";
@@ -2188,7 +2187,6 @@ fn test_obs_subject() {
     assert!(msg.is_ok());
     println!("parsed subject: {:?}", msg.unwrap());
 }
-*/
 
 
 // obs-comments    =   "Comments" *WSP ":" unstructured CRLF
