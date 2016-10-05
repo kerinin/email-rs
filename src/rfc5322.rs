@@ -510,9 +510,9 @@ fn test_phrase() {
 
 // unstructured    =   (*([FWS] VCHAR) *WSP) / obs-unstruct
 // TODO: parse new version
-pub fn unstructured_till<I: U8Input + Debug, V, F: FnMut(I) -> SimpleResult<I, V>>(i: I, f: F) -> SimpleResult<I, Bytes> {
-    println!("unstructured_till {:?}", i);
-    obs_unstruct_till(i, f)
+pub fn unstructured_crlf<I: U8Input + Debug>(i: I) -> SimpleResult<I, Bytes> {
+    println!("unstructured_crlf {:?}", i);
+    obs_unstruct_crlf(i)
 }
 
 // date-time       =   [ day-of-week "," ] date time [CFWS]
@@ -1479,44 +1479,77 @@ pub fn obs_body<I: U8Input + Debug>(i: I) -> SimpleResult<I, I::Buffer> {
 }
 
 // obs-unstruct    =   *((*LF *CR *(obs-utext *LF *CR)) / FWS)
-// NOTE: This parses as an infinite loop (empty match doesn't consume input, so
-// wrapping it in a many causes a cycle), so this implements the following
-//                 =   *((*LF *CR 1*(obs-utext *LF *CR)) / FWS)
-// TODO: The trailing *CR can accidentally consume the first token of a CRLF,
-// so we need to either prevent this from doing so or find a way of communicating
-// the fact it was done
-pub fn obs_unstruct_till<I: U8Input + Debug, V, F: FnMut(I) -> SimpleResult<I, V>>(i: I, mut f: F) -> SimpleResult<I, Bytes> {
-    println!("obs_unstruct_till {:?}", i);
-    many_till(i, |i| {
-        or(i, 
-           |i| {
-               matched_by(i, |i| {
-                   println!("obs_unstruct.matched_by {:?}", i);
-                   skip_many(i, lf).then(|i| {
-                       println!("obs_unstruct.skip_many(lf1) {:?}", i);
-                       skip_many(i, cr).then(|i| {
-                           println!("obs_unstruct.skip_many(cr1) {:?}", i);
-                           skip_many1(i, |i| {
-                               println!("obs_unstruct.skip_many1(obs-utext *lf *cr) {:?}", i);
-                               skip_many1(i, obs_utext).then(|i| {
-                                   println!("obs_unstruct.skip_many1(obs-utext) {:?}", i);
-                                   skip_many(i, lf).then(|i| {
-                                       println!("obs_unstruct.skip_many(lfn) {:?}", i);
-                                       skip_many(i, cr)
-                                   })
-                               })
-                           })
-                       })
-                   })
-               }).map(|(buf, _)| Bytes::from_slice(&buf.into_vec()))
-           },
-           fws)
-    }, |i| {
-        println!("obs_unstruct_till.till {:?}", i);
-        f(i)
-    }).map(|vs: Vec<Bytes>| {
-        vs.into_iter().fold(Bytes::empty(), |l, r| l.concat(&r))
+//
+// obs-unstruct cfws = *((*LF *CR *(obs-utext *LF *CR)) / FWS) CRLF
+//
+// I _think_ this is equivalent
+// obs-unstruct cfws = *(1*LF / 1*(CR >>!LF) / 1*obs-utext / FWS) CRLF
+//                   = *(1*(LF obs-utext) / FWS / 1*(CR >>!LF)) CRLF
+// obs-utext       =   %d0 / obs-NO-WS-CTL / VCHAR
+//                 =   %d0 /
+//                     %d1-8 /
+//                     %d11 /
+//                     %d12 /
+//                     %d14-31 /
+//                     %d33-126 /
+//                     %d127
+// LF              =   %d10
+const LF_OBS_UTEXT: [bool; 256] = [
+    //  0      1      2      3      4      5      6      7      8      9     10     11     12     13     14     15     16     17     18     19
+    true,  true,  true,  true,  true,  true,  true,  true,  true,  false, true,  true,  true,  false, true,  true,  true,  true,  true,  true,  //   0 -  19
+    true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  false, true,  true,  true,  true,  true,  true,  true,  //  20 -  39
+    true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  //  40 -  59
+    true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  //  60 -  79
+    true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  //  80 -  99
+    true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  // 100 - 119
+    true,  true,  true,  true,  true,  true,  true,  true,  false, false, false, false, false, false, false, false, false, false, false, false, // 120 - 139
+    false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, // 140 - 159
+    false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, // 160 - 179
+    false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, // 180 - 199
+    false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, // 200 - 219
+    false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, // 220 - 239
+    false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false                              // 240 - 256
+];
+pub fn obs_unstruct_crlf<I: U8Input + Debug>(i: I) -> SimpleResult<I, Bytes> {
+    println!("obs_unstruct_crlf {:?}", i);
+    many(i, |i| {
+        or(i,
+           |i| take_while1(i, |t| LF_OBS_UTEXT[t as usize]).map(|buf| Bytes::from_slice(&buf.into_vec())),
+           |i| or(i, fws, many1_cr_not_lf))
+    }).bind(|i, segments: Vec<Bytes>| {
+        crlf(i).then(|i| {
+            i.ret(segments.into_iter().fold(Bytes::empty(), |l, r| l.concat(&r)))
+        })
     })
+}
+
+pub fn many1_cr_not_lf<I: U8Input + Debug>(i: I) -> SimpleResult<I, Bytes> {
+    matched_by(i, |i| {
+        skip_many1(i, |i| {
+            token(i, 13).then(|i| {
+                peek(i).bind(|i, p| {
+                    if p == Some(10) {
+                        i.err(Error::unexpected())
+                    } else {
+                        i.ret(())
+                    }
+                })
+            })
+        })
+    }).map(|(buf, _)| Bytes::from_slice(&buf.into_vec()))
+}
+
+#[test]
+fn test_many1_cr_not_lf() {
+    let good = b"\x0d\x0d\x0dhello";
+    let msg = parse_only(many1_cr_not_lf, good);
+    assert!(msg.is_ok());
+    assert_eq!(msg.unwrap(), Bytes::from_slice(b"\x0d\x0d\x0d"));
+
+    let bad = b"\x0d\x0d\x0ahello";
+    let msg = parse_only(many1_cr_not_lf, bad);
+    assert!(msg.is_ok());
+    assert_eq!(msg.unwrap(), Bytes::from_slice(b"\x0d"));
 }
 
 // obs-phrase      =   word *(word / "." / CFWS)
@@ -2136,14 +2169,11 @@ pub fn obs_subject<I: U8Input + Debug>(i: I) -> SimpleResult<I, Field> {
             println!("subject.wsp {:?}", i);
             token(i, b':').then(|i| {
                 println!("subject.token {:?}", i);
-                unstructured_till(i, crlf).bind(|i, v| {
-                    println!("subject.unstructured {:?}", i);
-                    crlf(i).then(|i| {
-                        println!("subject.crlf {:?}", i);
-                        let value = UnstructuredField {data: v};
+                unstructured_crlf(i).bind(|i, v| {
+                    println!("subject.crlf {:?}", i);
+                    let value = UnstructuredField {data: v};
 
-                        i.ret(Field::Subject(value))
-                    })
+                    i.ret(Field::Subject(value))
                 })
             })
         })
@@ -2166,12 +2196,10 @@ pub fn obs_comments<I: U8Input + Debug>(i: I) -> SimpleResult<I, Field> {
     string(i, b"Comments").then(|i| {
         option(i, wsp, 0).then(|i| {
             token(i, b':').then(|i| {
-                unstructured_till(i, crlf).bind(|i, v| {
-                    crlf(i).then(|i| {
-                        let value = UnstructuredField {data: v};
+                unstructured_crlf(i).bind(|i, v| {
+                    let value = UnstructuredField {data: v};
 
-                        i.ret(Field::Comments(value))
-                    })
+                    i.ret(Field::Comments(value))
                 })
             })
         })
@@ -2315,15 +2343,12 @@ pub fn obs_optional<I: U8Input + Debug>(i: I) -> SimpleResult<I, Field> {
             println!("obs_optional.wsp {:?}", i);
             token(i, b':').then(|i| {
                 println!("obs_optional.token {:?}", i);
-                unstructured_till(i, crlf).bind(|i, v| {
-                    println!("obs_optional.unstructured {:?}", i);
-                    crlf(i).then(|i| {
-                        // NOTE: `field-name` is "printable US-ASCII characters not including ':'"
-                        let name = unsafe { String::from_utf8_unchecked(n.into_vec()) };
-                        let value = UnstructuredField {data: v};
+                unstructured_crlf(i).bind(|i, v| {
+                    // NOTE: `field-name` is "printable US-ASCII characters not including ':'"
+                    let name = unsafe { String::from_utf8_unchecked(n.into_vec()) };
+                    let value = UnstructuredField {data: v};
 
-                        i.ret(Field::Optional(name, value))
-                    })
+                    i.ret(Field::Optional(name, value))
                 })
             })
         })
