@@ -139,59 +139,59 @@ fn example_1_2() {
     };
     assert_eq!(email.date(), Some(&date));
 
-    // let from = AddressesField{
-    //     addresses: vec!(Address::Mailbox{
-    //         local_part: "john.q.public".to_string(),
-    //         domain: "example.com".to_string(),
-    //         display_name: Some(Bytes::from_slice(b" Joe Q. Public ")),
-    //     }),
-    // };
-    // assert_eq!(email.from(), Some(&from));
-    //
-    // let to = AddressesField{
-    //     addresses: vec!(
-    //                    Address::Mailbox{
-    //                        local_part: "mary".to_string(),
-    //                        domain: "x.test".to_string(),
-    //                        display_name: Some(Bytes::from_slice(b" Mary Smith " )),
-    //                    },
-    //                    Address::Mailbox{
-    //                        local_part: "jdoe".to_string(),
-    //                        domain: "example.org".to_string(),
-    //                        display_name: None,
-    //                    },
-    //                    Address::Mailbox{
-    //                        local_part: "one".to_string(),
-    //                        domain: "y.test".to_string(),
-    //                        display_name: Some(Bytes::from_slice(b"Who? ")),
-    //                    },
-    //     ),
-    // };
-    // assert_eq!(email.to(), Some(&to));
-    //
-    // let cc = AddressesField{
-    //     addresses: vec!(
-    //                    Address::Mailbox{
-    //                        local_part: "boss".to_string(),
-    //                        domain: "nil.test".to_string(),
-    //                        display_name: None,
-    //                    },
-    //                    Address::Mailbox{
-    //                        local_part: "sysservices".to_string(),
-    //                        domain: "example.net".to_string(),
-    //                        display_name: Some(Bytes::from_slice(b"Giant; \"Big\" Box ")),
-    //                    },
-    //     ),
-    // };
-    // assert_eq!(email.cc(), Some(&cc));
-    //
-    // let msgid = MessageIDField{
-    //     message_id: MessageID{
-    //         id_left: Bytes::from_slice(b"5678.21-Nov-1997"),
-    //         id_right: Bytes::from_slice(b"example.com"),
-    //     },
-    // };
-    // assert_eq!(email.message_id(), Some(&msgid));
+    let from = AddressesField{
+        addresses: vec!(Address::Mailbox{
+            local_part: "john.q.public".to_string(),
+            domain: "example.com".to_string(),
+            display_name: Some(Bytes::from_slice(b" Joe Q. Public ")),
+        }),
+    };
+    assert_eq!(email.from(), Some(&from));
+
+    let to = AddressesField{
+        addresses: vec!(
+                       Address::Mailbox{
+                           local_part: "mary".to_string(),
+                           domain: "x.test".to_string(),
+                           display_name: Some(Bytes::from_slice(b" Mary Smith " )),
+                       },
+                       Address::Mailbox{
+                           local_part: " jdoe".to_string(),
+                           domain: "example.org".to_string(),
+                           display_name: None,
+                       },
+                       Address::Mailbox{
+                           local_part: "one".to_string(),
+                           domain: "y.test".to_string(),
+                           display_name: Some(Bytes::from_slice(b" Who? ")),
+                       },
+        ),
+    };
+    assert_eq!(email.to(), Some(&to));
+
+    let cc = AddressesField{
+        addresses: vec!(
+                       Address::Mailbox{
+                           local_part: "boss".to_string(),
+                           domain: "nil.test".to_string(),
+                           display_name: None,
+                       },
+                       Address::Mailbox{
+                           local_part: "sysservices".to_string(),
+                           domain: "example.net".to_string(),
+                           display_name: Some(Bytes::from_slice(b" Giant; \\\"Big\\\" Box ")),
+                       },
+        ),
+    };
+    assert_eq!(email.cc(), Some(&cc));
+
+    let msgid = MessageIDField{
+        message_id: MessageID{
+            id_left: Bytes::from_slice(b"5678.21-Nov-1997"),
+            id_right: Bytes::from_slice(b"example.com"),
+        },
+    };
+    assert_eq!(email.message_id(), Some(&msgid));
 }
 
 #[test]
@@ -214,24 +214,12 @@ fn example_2_1() {
     println!("{:?}", msg);
 
     assert!(msg.is_ok());
-    // for field in msg.unwrap().fields.iter() {
-    //     assert!(!field.is_unstructured());
-    //     assert!(!field.is_malformed());
-    // }
+    for field in msg.unwrap().fields.iter() {
+        assert!(!field.is_unstructured());
+        assert!(!field.is_malformed());
+    }
 }
 
-#[test]
-fn example_2_3() {
-    let raw = include_bytes!("example_2.3.eml");
-    let msg = parse_only(message, raw);
-    println!("{:?}", msg);
-
-    assert!(msg.is_ok());
-    // for field in msg.unwrap().fields.iter() {
-    //     assert!(!field.is_unstructured());
-    //     assert!(!field.is_malformed());
-    // }
-}
 
 #[test]
 fn example_2_2() {
@@ -240,10 +228,22 @@ fn example_2_2() {
     println!("{:?}", msg);
 
     assert!(msg.is_ok());
-    // for field in msg.unwrap().fields.iter() {
-    //     assert!(!field.is_unstructured());
-    //     assert!(!field.is_malformed());
-    // }
+    for field in msg.unwrap().fields.iter() {
+        assert!(!field.is_unstructured());
+        assert!(!field.is_malformed());
+    }
+}
+#[test]
+fn example_2_3() {
+    let raw = include_bytes!("example_2.3.eml");
+    let msg = parse_only(message, raw);
+    println!("{:?}", msg);
+
+    assert!(msg.is_ok());
+    for field in msg.unwrap().fields.iter() {
+        assert!(!field.is_unstructured());
+        assert!(!field.is_malformed());
+    }
 }
 
 #[test]
@@ -267,10 +267,10 @@ fn example_3_2() {
     println!("{:?}", msg);
 
     assert!(msg.is_ok());
-    // for field in msg.unwrap().fields.iter() {
-    //     assert!(!field.is_unstructured());
-    //     assert!(!field.is_malformed());
-    // }
+    for field in msg.unwrap().fields.iter() {
+        assert!(!field.is_unstructured());
+        assert!(!field.is_malformed());
+    }
 }
 
 #[test]
@@ -280,10 +280,10 @@ fn example_4() {
     println!("{:?}", msg);
 
     assert!(msg.is_ok());
-    // for field in msg.unwrap().fields.iter() {
-    //     assert!(!field.is_unstructured());
-    //     assert!(!field.is_malformed());
-    // }
+    for field in msg.unwrap().fields.iter() {
+        assert!(!field.is_unstructured());
+        assert!(!field.is_malformed());
+    }
 }
 
 #[test]
@@ -306,6 +306,7 @@ fn example_6_1() {
     println!("{:?}", msg);
 
     assert!(msg.is_ok());
+    // NOTE: Screw this wierdo routing noise
     // for field in msg.unwrap().fields.iter() {
     //     assert!(!field.is_unstructured());
     //     assert!(!field.is_malformed());

@@ -177,26 +177,13 @@ impl Message {
 #[derive(Clone, Debug, PartialEq)]
 pub struct Trace {
     pub return_path: Option<Address>,
-    pub received: Vec<ReceivedField>,
-    pub fields: Vec<Resent>,
+    pub fields: Vec<Field>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct ReceivedField {
     pub date_time: DateTime<FixedOffset>,
-    pub data: Bytes,
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub enum Resent {
-    Date(DateTimeField),
-    From(AddressesField),
-    Sender(AddressField),
-    To(AddressesField),
-    Cc(AddressesField),
-    Bcc(AddressesField),
-    ReplyTo(AddressesField),
-    MessageID(MessageIDField),
+    pub tokens: Vec<Bytes>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -215,6 +202,15 @@ pub enum Field {
     Comments(UnstructuredField),
     Keywords(KeywordsField),
     ReturnPath(AddressField),
+    Received(ReceivedField),
+    ResentDate(DateTimeField),
+    ResentFrom(AddressesField),
+    ResentSender(AddressField),
+    ResentTo(AddressesField),
+    ResentCc(AddressesField),
+    ResentBcc(AddressesField),
+    ResentReplyTo(AddressesField),
+    ResentMessageID(MessageIDField),
     Optional(String, UnstructuredField),
 }
 
