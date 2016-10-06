@@ -5,6 +5,8 @@
 extern crate chomp;
 extern crate chrono;
 extern crate bytes;
+#[macro_use]
+extern crate log;
 
 // pub mod rfc2822;
 pub mod rfc5322;

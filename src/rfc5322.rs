@@ -37,12 +37,12 @@ const ALPHA: [bool; 256] = [
     false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, // 220 - 239
     false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false                              // 240 - 256
 ];
-pub fn alpha<I: U8Input + Debug>(i: I) -> SimpleResult<I, u8> {
+pub fn alpha<I: U8Input>(i: I) -> SimpleResult<I, u8> {
     satisfy(i, |c| ALPHA[c as usize])
 }
 
 // BIT            =  "0" / "1"
-pub fn bit<I: U8Input + Debug>(i: I) -> SimpleResult<I, u8> {
+pub fn bit<I: U8Input>(i: I) -> SimpleResult<I, u8> {
     satisfy(i, |i| i == 0 || i == 1)
 }
 
@@ -53,11 +53,11 @@ pub fn bit<I: U8Input + Debug>(i: I) -> SimpleResult<I, u8> {
 // CR             =  %x0D
 // CR             =  %d13
 //                        ; carriage return
-pub fn cr<I: U8Input + Debug>(i: I) -> SimpleResult<I, u8> {
+pub fn cr<I: U8Input>(i: I) -> SimpleResult<I, u8> {
     satisfy(i, |i| i == 13)
 }
 
-pub fn many_cr<I: U8Input + Debug>(i: I) -> SimpleResult<I, I::Buffer> {
+pub fn many_cr<I: U8Input>(i: I) -> SimpleResult<I, I::Buffer> {
     matched_by(i, |i| {
         skip_many(i, cr)
     }).map(|(buf, _)| buf)
@@ -65,7 +65,7 @@ pub fn many_cr<I: U8Input + Debug>(i: I) -> SimpleResult<I, I::Buffer> {
 
 // CRLF           =  CR LF
 //                        ; Internet standard newline
-pub fn crlf<I: U8Input + Debug>(i: I) -> SimpleResult<I, I::Buffer> {
+pub fn crlf<I: U8Input>(i: I) -> SimpleResult<I, I::Buffer> {
     matched_by(i, |i| {
         cr(i).then(lf)
     }).map(|(buf, _)| buf)
@@ -80,7 +80,7 @@ pub fn crlf<I: U8Input + Debug>(i: I) -> SimpleResult<I, I::Buffer> {
 // DQUOTE         =  %x22
 // DQUOTE         =  %d34
 //                        ; " (Double Quote)
-pub fn dquote<I: U8Input + Debug>(i: I) -> SimpleResult<I, u8> {
+pub fn dquote<I: U8Input>(i: I) -> SimpleResult<I, u8> {
     satisfy(i, |i| i == 34)
 }
 //
@@ -89,18 +89,18 @@ pub fn dquote<I: U8Input + Debug>(i: I) -> SimpleResult<I, u8> {
 // HTAB           =  %x09
 // HTAB           =  %d09
 //                        ; horizontal tab
-pub fn htab<I: U8Input + Debug>(i: I) -> SimpleResult<I, u8> {
+pub fn htab<I: U8Input>(i: I) -> SimpleResult<I, u8> {
     satisfy(i, |i| i == 9)
 }
 //
 // LF             =  %x0A
 // LF             =  %d10
 //                        ; linefeed
-pub fn lf<I: U8Input + Debug>(i: I) -> SimpleResult<I, u8> {
+pub fn lf<I: U8Input>(i: I) -> SimpleResult<I, u8> {
     satisfy(i, |i| i == 10)
 }
 
-pub fn many_lf<I: U8Input + Debug>(i: I) -> SimpleResult<I, I::Buffer> {
+pub fn many_lf<I: U8Input>(i: I) -> SimpleResult<I, I::Buffer> {
     matched_by(i, |i| {
         skip_many(i, lf)
     }).map(|(buf, _)| buf)
@@ -122,7 +122,7 @@ pub fn many_lf<I: U8Input + Debug>(i: I) -> SimpleResult<I, I::Buffer> {
 //
 // SP             =  %x20
 // SP             =  %d32
-pub fn sp<I: U8Input + Debug>(i: I) -> SimpleResult<I, u8> {
+pub fn sp<I: U8Input>(i: I) -> SimpleResult<I, u8> {
     satisfy(i, |i| i == 32)
 }
 
@@ -145,18 +145,18 @@ const VCHAR: [bool; 256] = [
     false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, // 220 - 239
     false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false                              // 240 - 256
 ];
-pub fn vchar<I: U8Input + Debug>(i: I) -> SimpleResult<I, u8> {
+pub fn vchar<I: U8Input>(i: I) -> SimpleResult<I, u8> {
     satisfy(i, |c| VCHAR[c as usize])
 }
 
 // WSP            =  SP / HTAB
 //						  ; white space
-pub fn wsp<I: U8Input + Debug>(i: I) -> SimpleResult<I, u8> {
+pub fn wsp<I: U8Input>(i: I) -> SimpleResult<I, u8> {
     or(i, sp, htab)
 }
 
 // quoted-pair     =   ("\" (VCHAR / WSP)) / obs-qp
-pub fn quoted_pair<I: U8Input + Debug>(i: I) -> SimpleResult<I, u8> {
+pub fn quoted_pair<I: U8Input>(i: I) -> SimpleResult<I, u8> {
     or(i, 
        |i| {
            token(i, b'\\').then(|i| {
@@ -168,7 +168,7 @@ pub fn quoted_pair<I: U8Input + Debug>(i: I) -> SimpleResult<I, u8> {
 
 // FWS             =   ([*WSP CRLF] 1*WSP) /  obs-FWS
 //                                        ; Folding white space
-pub fn fws<I: U8Input + Debug>(i: I) -> SimpleResult<I, Bytes> {
+pub fn fws<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
     or(i, 
        |i| {
            option(i, |i| {
@@ -211,13 +211,13 @@ const CTEXT: [bool; 256] = [
     false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, // 220 - 239
     false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false                              // 240 - 256
 ];
-pub fn ctext<I: U8Input + Debug>(i: I) -> SimpleResult<I, u8> {
+pub fn ctext<I: U8Input>(i: I) -> SimpleResult<I, u8> {
     satisfy(i, |c| CTEXT[c as usize])
 }
 
 // ccontent        =   ctext / quoted-pair / comment
 // NOTE: This _seems_ like it's going to create a loop
-pub fn ccontent<I: U8Input + Debug>(i: I) -> SimpleResult<I, ()> {
+pub fn ccontent<I: U8Input>(i: I) -> SimpleResult<I, ()> {
     or(i,
        |i| ctext(i).map(|_| ()),
        |i| or(i,
@@ -226,7 +226,7 @@ pub fn ccontent<I: U8Input + Debug>(i: I) -> SimpleResult<I, ()> {
 }
 
 // comment         =   "(" *([FWS] ccontent) [FWS] ")"
-pub fn comment<I: U8Input + Debug>(i: I) -> SimpleResult<I, ()> {
+pub fn comment<I: U8Input>(i: I) -> SimpleResult<I, ()> {
     token(i, b'(').then(|i| {
         skip_many(i, |i| {
             option(i, fws, Bytes::empty()).then(ccontent)
@@ -240,7 +240,7 @@ pub fn comment<I: U8Input + Debug>(i: I) -> SimpleResult<I, ()> {
 
 // CFWS            =   (1*([FWS] comment) [FWS]) / FWS
 //                 =   ([FWS] 1*(comment [FWS])) / FWS
-pub fn cfws<I: U8Input + Debug>(i: I) -> SimpleResult<I, Bytes> {
+pub fn cfws<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
     or(i,
        |i| {
            option(i, fws, Bytes::empty()).bind(|i, buf1| {
@@ -258,7 +258,7 @@ pub fn cfws<I: U8Input + Debug>(i: I) -> SimpleResult<I, Bytes> {
        fws)
 }
 
-pub fn drop_cfws<I: U8Input + Debug>(i: I) -> SimpleResult<I, ()> {
+pub fn drop_cfws<I: U8Input>(i: I) -> SimpleResult<I, ()> {
     cfws(i).map(|_| ())
 }
 
@@ -300,13 +300,38 @@ fn test_cfws() {
 //                     "`" / "{" /
 //                     "|" / "}" /
 //                     "~"
+//
+//                 =   %d33 \       ; !
+//                     %d35 \       ; #
+//                     %d36 \       ; $
+//                     %d37 \       ; %
+//                     %d38 \       ; &
+//                     %d39 \       ; '
+//                     %d42 \       ; *
+//                     %d43 \       ; +
+//                     %d45 \       ; -
+//                     %d47 \       ; /
+//                     %d48-57 \    ; digit (%x30-39)
+//                     %d61 \       ; =
+//                     %d63 \       ; ?
+//                     %d65-90 \    ; A-Z (%x41-5a)
+//                     %d94 \       ; ^
+//                     %d95 \       ; _
+//                     %d97-122 \   ; a-z (%x61-7a)
+//                     %d123 \      ; {
+//                     %d124 \      ; |
+//                     %d125 \      ; }
+//                     %d126 \      ; ~
+//
+//                 =   %d33 \ %d35-39 \ %d42-43 \ %d45 \ %d47-57 \ %d61 \ 
+//                     %d63 \ %d65-81 \ %d94-95 \ %d97-126
 const ATEXT: [bool; 256] = [
     //  0      1      2      3      4      5      6      7      8      9     10     11     12     13     14     15     16     17     18     19
     false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, //   0 -  19
     false, false, false, false, false, false, false, false, false, false, false, false, false, true,  false, true,  true,  true,  true,  true,  //  20 -  39
     false, false, true,  true,  false, true,  false, true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  false, false, //  40 -  59
-    false, false, false, true,  false, true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  //  60 -  79
-    true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  false, false, false, true,  true,  true,  true,  true,  true,  //  80 -  99
+    false, true,  false, true,  false, true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  //  60 -  79
+    true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  false, false, false, true,  true,  false, true,  true,  true,  //  80 -  99
     true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  // 100 - 119
     true,  true,  true,  true,  true,  true,  true,  false, false, false, false, false, false, false, false, false, false, false, false, false, // 120 - 139
     false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, // 140 - 159
@@ -316,12 +341,27 @@ const ATEXT: [bool; 256] = [
     false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, // 220 - 239
     false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false                              // 240 - 256
 ];
-pub fn atext<I: U8Input + Debug>(i: I) -> SimpleResult<I, u8> {
+pub fn atext<I: U8Input>(i: I) -> SimpleResult<I, u8> {
     satisfy(i, |c| ATEXT[c as usize])
 }
 
+#[test]
+fn test_atext() {
+    let i = b"=";
+    let msg = parse_only(atext, i);
+    assert!(msg.is_ok());
+
+    let i = b"?";
+    let msg = parse_only(atext, i);
+    assert!(msg.is_ok());
+
+    let i = b"-";
+    let msg = parse_only(atext, i);
+    assert!(msg.is_ok());
+}
+
 // atom            =   [CFWS] 1*atext [CFWS]
-pub fn atom<I: U8Input + Debug>(i: I) -> SimpleResult<I, Bytes> {
+pub fn atom<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
     option(i, cfws, Bytes::empty()).bind(|i, cfws1| {
         matched_by(i, |i| {
             skip_many1(i, atext)
@@ -337,13 +377,18 @@ pub fn atom<I: U8Input + Debug>(i: I) -> SimpleResult<I, Bytes> {
 
 #[test]
 fn test_atom() {
+    let i = b" =?utf-8?Q?Humble=20Bundle?= ";
+    let msg = parse_only(atom, i);
+    println!("msg: {:?}", msg);
+    assert!(msg.is_ok());
+
     let i = b" \"Joe Q. Public\" ";
     let msg = parse_only(atom, i);
     assert!(!msg.is_ok());
 }
 
 // dot-atom-text   =   1*atext *("." 1*atext)
-pub fn dot_atom_text<I: U8Input + Debug>(i: I) -> SimpleResult<I, I::Buffer> {
+pub fn dot_atom_text<I: U8Input>(i: I) -> SimpleResult<I, I::Buffer> {
     matched_by(i, |i| {
         skip_many1(i, atext).then(|i| {
             skip_many1(i, |i| {
@@ -356,7 +401,7 @@ pub fn dot_atom_text<I: U8Input + Debug>(i: I) -> SimpleResult<I, I::Buffer> {
 }
 
 // dot-atom        =   [CFWS] dot-atom-text [CFWS]
-pub fn dot_atom<I: U8Input + Debug>(i: I) -> SimpleResult<I, Bytes> {
+pub fn dot_atom<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
     option(i, cfws, Bytes::empty()).bind(|i, buf1| {
         dot_atom_text(i).bind(|i, buf| {
             option(i, cfws, Bytes::empty()).bind(|i, buf2| {
@@ -395,12 +440,12 @@ const QTEXT: [bool; 256] = [
     false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, // 220 - 239
     false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false                              // 240 - 256
 ];
-pub fn qtext<I: U8Input + Debug>(i: I) -> SimpleResult<I, u8> {
+pub fn qtext<I: U8Input>(i: I) -> SimpleResult<I, u8> {
     satisfy(i, |c| QTEXT[c as usize])
 }
 
 // qcontent        =   qtext / quoted-pair
-pub fn qcontent<I: U8Input + Debug>(i: I) -> SimpleResult<I, u8> {
+pub fn qcontent<I: U8Input>(i: I) -> SimpleResult<I, u8> {
     or(i, qtext, quoted_pair)
 }
 
@@ -424,18 +469,13 @@ fn test_qcontent() {
 // characters nor the quote characters themselves are part of the
 // quoted-string; the quoted-string is what is contained between the two
 // quote characters.
-pub fn quoted_string<I: U8Input + Debug>(i: I) -> SimpleResult<I, Bytes> {
-    println!("quoted-string: {:?}", i);
+pub fn quoted_string<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
     option(i, cfws, Bytes::empty()).bind(|i, cfws_bytes_pre| {
-        println!("quoted-string.cfws: {:?}", i);
         dquote(i).then(|i| {
-            println!("quoted-string.dquote1: {:?}", i);
             many(i, |i| {
                 option(i, fws, Bytes::empty()).bind(|i, fws_bytes| {
-                    println!("quoted-string.fws1: {:?}", i);
                     // NOTE: Take advantage of the buffer
                     matched_by(i, |i| {
-                        println!("quoted-string.qcontent: {:?}", i);
                         skip_many1(i, qcontent)
                     }).map(|(buf, _)| fws_bytes.concat(&Bytes::from_slice(&buf.into_vec())))
                 })
@@ -443,11 +483,8 @@ pub fn quoted_string<I: U8Input + Debug>(i: I) -> SimpleResult<I, Bytes> {
                 bufs.into_iter().fold(cfws_bytes_pre, |l, r| l.concat(&r))
             }).bind(|i, buf| {
                 option(i, fws, Bytes::empty()).bind(|i, fws_bytes| {
-                    println!("quoted-string.fws2: {:?}", i);
                     dquote(i).then(|i| {
-                        println!("quoted-string.dquote2: {:?}", i);
                         option(i, cfws, Bytes::empty()).bind(|i, cfws_bytes_post| {
-                            println!("quoted-string.dquote2: {:?}", i);
                             i.ret(buf.concat(&fws_bytes).concat(&cfws_bytes_post))
                         })
                     })
@@ -485,12 +522,16 @@ fn test_quoted_string_not() {
 */
 
 // word            =   atom / quoted-string
-pub fn word<I: U8Input + Debug>(i: I) -> SimpleResult<I, Bytes> {
+pub fn word<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
     or(i, atom, quoted_string)
 }
 
 #[test]
 fn test_word() {
+    let i = b" =?utf-8?Q?Humble=20Bundle?= ";
+    let msg = parse_only(word, i);
+    assert!(msg.is_ok());
+
     let i = b"Joe ";
     let msg = parse_only(word, i);
     assert!(msg.is_ok());
@@ -505,7 +546,7 @@ fn test_word() {
 
 // phrase          =   1*word / obs-phrase
 // NOTE: Matching obs-phrase first to avoid early termination on '.'
-pub fn phrase<I: U8Input + Debug>(i: I) -> SimpleResult<I, Bytes> {
+pub fn phrase<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
     or(i,
        obs_phrase,
        |i| {
@@ -517,6 +558,10 @@ pub fn phrase<I: U8Input + Debug>(i: I) -> SimpleResult<I, Bytes> {
 
 #[test]
 fn test_phrase() {
+    let i = b" =?utf-8?Q?Humble=20Bundle?= ";
+    let msg = parse_only(phrase, i);
+    assert!(msg.is_ok());
+
     let i = b"Joe Q. Public";
     let msg = parse_only(phrase, i);
     assert!(msg.is_ok());
@@ -532,26 +577,20 @@ fn test_phrase() {
 
 // unstructured    =   (*([FWS] VCHAR) *WSP) / obs-unstruct
 // TODO: parse new version
-pub fn unstructured_crlf<I: U8Input + Debug>(i: I) -> SimpleResult<I, Bytes> {
-    println!("unstructured_crlf {:?}", i);
+pub fn unstructured_crlf<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
     obs_unstruct_crlf(i)
 }
 
 // date-time       =   [ day-of-week "," ] date time [CFWS]
-pub fn date_time<I: U8Input + Debug>(i: I) -> SimpleResult<I, DateTime<FixedOffset>> {
-    println!("date-time: {:?}", i);
+pub fn date_time<I: U8Input>(i: I) -> SimpleResult<I, DateTime<FixedOffset>> {
     option(i, |i| {
         day_of_week(i).then(|i| {
             token(i, b',').map(|_| ())
         })
     }, ()).then(|i| {
-        println!("date-time.day-of-week: {:?}", i);
         date(i).bind(|i, d| {
-            println!("date-time.date: {:?}", i);
             time(i).bind(|i, (t, o)| {
-                println!("date-time.time: {:?}", i);
                 option(i, drop_cfws, ()).then(|i| {
-                    println!("date-time.cfws: {:?}", i);
                     let ndt = NaiveDateTime::new(d, t);
 
                     match o.from_local_datetime(&ndt) {
@@ -582,7 +621,7 @@ fn test_date_time() {
 }
 
 // day-of-week     =   ([FWS] day-name) / obs-day-of-week
-pub fn day_of_week<I: U8Input + Debug>(i: I) -> SimpleResult<I, Day> {
+pub fn day_of_week<I: U8Input>(i: I) -> SimpleResult<I, Day> {
     or(i, 
        |i| option(i, fws, Bytes::empty()).then(day_name),
        obs_day_of_week)
@@ -590,7 +629,7 @@ pub fn day_of_week<I: U8Input + Debug>(i: I) -> SimpleResult<I, Day> {
 
 // day-name        =   "Mon" / "Tue" / "Wed" / "Thu" /
 //                     "Fri" / "Sat" / "Sun"
-pub fn day_name<I: U8Input + Debug>(i: I) -> SimpleResult<I, Day> {
+pub fn day_name<I: U8Input>(i: I) -> SimpleResult<I, Day> {
     or(i, |i| string(i, b"Mon").then(|i| i.ret(Day::Mon)),
     |i| or(i, |i| string(i, b"Tue").then(|i| i.ret(Day::Tue)),
     |i| or(i, |i| string(i, b"Wed").then(|i| i.ret(Day::Wed)),
@@ -601,7 +640,7 @@ pub fn day_name<I: U8Input + Debug>(i: I) -> SimpleResult<I, Day> {
 }
 
 // date            =   day month year
-pub fn date<I: U8Input + Debug>(i: I) -> SimpleResult<I, NaiveDate> {
+pub fn date<I: U8Input>(i: I) -> SimpleResult<I, NaiveDate> {
     day(i).bind(|i, d| {
         month(i).bind(|i, m| {
             year(i).bind(|i, mut y| {
@@ -626,7 +665,7 @@ fn test_date() {
 }
  
 // day             =   ([FWS] 1*2DIGIT FWS) / obs-day
-pub fn day<I: U8Input + Debug>(i: I) -> SimpleResult<I, usize> {
+pub fn day<I: U8Input>(i: I) -> SimpleResult<I, usize> {
     or(i,
        |i| {
            option(i, fws, Bytes::empty()).then(|i| {
@@ -650,7 +689,7 @@ fn test_day() {
 // month           =   "Jan" / "Feb" / "Mar" / "Apr" /
 //                     "May" / "Jun" / "Jul" / "Aug" /
 //                     "Sep" / "Oct" / "Nov" / "Dec"
-pub fn month<I: U8Input + Debug>(i: I) -> SimpleResult<I, Month> {
+pub fn month<I: U8Input>(i: I) -> SimpleResult<I, Month> {
     or(i, |i| string(i, b"Jan").then(|i| i.ret(Month::Jan)),
     |i| or(i, |i| string(i, b"Feb").then(|i| i.ret(Month::Feb)),
     |i| or(i, |i| string(i, b"Mar").then(|i| i.ret(Month::Mar)),
@@ -673,7 +712,7 @@ fn test_month() {
 }
  
 // year            =   (FWS 4*DIGIT FWS) / obs-year
-pub fn year<I: U8Input + Debug>(i: I) -> SimpleResult<I, usize> {
+pub fn year<I: U8Input>(i: I) -> SimpleResult<I, usize> {
     or(i,
        |i| fws(i).then(|i| parse_digits(i, (4..))),
        obs_year)
@@ -691,12 +730,9 @@ fn test_year() {
 }
 
 // time            =   time-of-day zone
-pub fn time<I: U8Input + Debug>(i: I) -> SimpleResult<I, (NaiveTime, FixedOffset)> {
-    println!("time: {:?}", i);
+pub fn time<I: U8Input>(i: I) -> SimpleResult<I, (NaiveTime, FixedOffset)> {
     time_of_day(i).bind(|i, t| {
-        println!("time.time-of-day: {:?}", i);
         zone(i).bind(|i, z| {
-            println!("time.zone: {:?}", i);
             i.ret((t, z))
         })
     })
@@ -719,7 +755,7 @@ fn test_time() {
 }
 
 // time-of-day     =   hour ":" minute [ ":" second ]
-pub fn time_of_day<I: U8Input + Debug>(i: I) -> SimpleResult<I, NaiveTime> {
+pub fn time_of_day<I: U8Input>(i: I) -> SimpleResult<I, NaiveTime> {
     hour(i).bind(|i, h| {
         token(i, b':').then(|i| {
             minute(i).bind(|i, m| {
@@ -734,39 +770,34 @@ pub fn time_of_day<I: U8Input + Debug>(i: I) -> SimpleResult<I, NaiveTime> {
 }
 
 // hour            =   2DIGIT / obs-hour
-pub fn hour<I: U8Input + Debug>(i: I) -> SimpleResult<I, usize> {
+pub fn hour<I: U8Input>(i: I) -> SimpleResult<I, usize> {
     or(i,
        |i| parse_digits(i, 2),
        obs_hour)
 }
 
 // minute          =   2DIGIT / obs-minute
-pub fn minute<I: U8Input + Debug>(i: I) -> SimpleResult<I, usize> {
+pub fn minute<I: U8Input>(i: I) -> SimpleResult<I, usize> {
     or(i,
        |i| parse_digits(i, 2),
        obs_minute)
 }
 
 // second          =   2DIGIT / obs-second
-pub fn second<I: U8Input + Debug>(i: I) -> SimpleResult<I, usize> {
+pub fn second<I: U8Input>(i: I) -> SimpleResult<I, usize> {
     or(i,
        |i| parse_digits(i, 2),
        obs_second)
 }
 
 // zone            =   (FWS ( "+" / "-" ) 4DIGIT) / obs-zone
-pub fn zone<I: U8Input + Debug>(i: I) -> SimpleResult<I, FixedOffset> {
-    println!("zone: {:?}", i);
+pub fn zone<I: U8Input>(i: I) -> SimpleResult<I, FixedOffset> {
     or(i,
        |i| {
            fws(i).then(|i| {
-               println!("zone.fws: {:?}", i);
                or(i, |i| token(i, b'+'), |i| token(i, b'-')).bind(|i, s| {
-                   println!("zone.token: {:?}", i);
                    parse_digits(i, 2).bind(|i, offset_h: i32| {
-                       println!("zone.parse-digits: {:?}", i);
                        parse_digits(i, 2).bind(|i, offset_m: i32| {
-                           println!("zone.parse-digits: {:?}", i);
                            let offset = (offset_h * 3600) + (offset_m * 60);
                            let zone = match s {
                                b'+' => FixedOffset::east(offset),
@@ -789,12 +820,12 @@ fn test_zone() {
 }
 
 // address         =   mailbox / group
-pub fn address<I: U8Input + Debug>(i: I) -> SimpleResult<I, Address> {
+pub fn address<I: U8Input>(i: I) -> SimpleResult<I, Address> {
     or(i, mailbox, group)
 }
 
 // mailbox         =   name-addr / addr-spec
-pub fn mailbox<I: U8Input + Debug>(i: I) -> SimpleResult<I, Address> {
+pub fn mailbox<I: U8Input>(i: I) -> SimpleResult<I, Address> {
     or(i,
        |i| name_addr(i).map(|(local_part, domain, maybe_display_name)| {
            Address::Mailbox{
@@ -814,6 +845,10 @@ pub fn mailbox<I: U8Input + Debug>(i: I) -> SimpleResult<I, Address> {
 
 #[test]
 fn test_mailbox() {
+    let i = b" =?utf-8?Q?Humble=20Bundle?= <contact@humblebundle.com>";
+    let msg = parse_only(mailbox, i);
+    assert!(msg.is_ok());
+
     // let i = b"Mary Smith <@machine.tld:mary@example.net>";
     // let msg = parse_only(mailbox, i);
     // assert!(msg.is_ok());
@@ -838,7 +873,7 @@ fn test_mailbox() {
 }
 
 // name-addr       =   [display-name] angle-addr
-pub fn name_addr<I: U8Input + Debug>(i: I) -> SimpleResult<I, (Bytes, Bytes, Option<Bytes>)> {
+pub fn name_addr<I: U8Input>(i: I) -> SimpleResult<I, (Bytes, Bytes, Option<Bytes>)> {
     option(i, |i| {
         display_name(i).map(|n| Some(n))
     }, None).bind(|i, n| {
@@ -850,6 +885,10 @@ pub fn name_addr<I: U8Input + Debug>(i: I) -> SimpleResult<I, (Bytes, Bytes, Opt
 
 #[test]
 fn test_name_addr() {
+    let i = b" =?utf-8?Q?Humble=20Bundle?= <contact@humblebundle.com>";
+    let msg = parse_only(name_addr, i);
+    assert!(msg.is_ok());
+
     let i = b"Who? <one@y.test>";
     let msg = parse_only(name_addr, i);
     assert!(msg.is_ok());
@@ -900,7 +939,7 @@ fn test_name_addr() {
 // angle-addr      =   [CFWS] "<" addr-spec ">" [CFWS] /
 //                     obs-angle-addr
 // NOTE: Not implementing obs-angle-addr because "routing" is bs
-pub fn angle_addr<I: U8Input + Debug>(i: I) -> SimpleResult<I, (Bytes, Bytes)> {
+pub fn angle_addr<I: U8Input>(i: I) -> SimpleResult<I, (Bytes, Bytes)> {
     option(i, drop_cfws, ()).then(|i| {
         token(i, b'<').then(|i| {
             addr_spec(i).bind(|i, (l, d)| {
@@ -930,7 +969,7 @@ fn test_angle_addr() {
 }
 
 // group           =   display-name ":" [group-list] ";" [CFWS]
-pub fn group<I: U8Input + Debug>(i: I) -> SimpleResult<I, Address> {
+pub fn group<I: U8Input>(i: I) -> SimpleResult<I, Address> {
     display_name(i).bind(|i, n| {
         token(i, b':').then(|i| {
             option(i, group_list, None).bind(|i, l| {
@@ -968,12 +1007,16 @@ fn test_group() {
 
 //
 // display-name    =   phrase
-pub fn display_name<I: U8Input + Debug>(i: I) -> SimpleResult<I, Bytes> {
+pub fn display_name<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
     phrase(i)
 }
 
 #[test]
 fn test_display_name() {
+    let i = b" =?utf-8?Q?Humble=20Bundle?= ";
+    let msg = parse_only(display_name, i);
+    assert!(msg.is_ok());
+
     let i = b"A Group(Some people)\r\n     ";
     let msg = parse_only(display_name, i);
     assert!(msg.is_ok());
@@ -999,8 +1042,7 @@ fn test_display_name() {
 
 
 // mailbox-list    =   (mailbox *("," mailbox)) / obs-mbox-list
-pub fn mailbox_list<I: U8Input + Debug>(i: I) -> SimpleResult<I, Vec<Address>> {
-    println!("mailbox-list {:?}", i);
+pub fn mailbox_list<I: U8Input>(i: I) -> SimpleResult<I, Vec<Address>> {
     or(i,
        |i| {
            mailbox(i).bind(|i, mb1| {
@@ -1017,6 +1059,10 @@ pub fn mailbox_list<I: U8Input + Debug>(i: I) -> SimpleResult<I, Vec<Address>> {
 
 #[test]
 fn test_mailbox_list() {
+    let i = b" =?utf-8?Q?Humble=20Bundle?= <contact@humblebundle.com>";
+    let msg = parse_only(mailbox_list, i);
+    assert!(msg.is_ok());
+
     let i = b"Joe Q. Public <john.q.public@example.com>";
     let msg = parse_only(mailbox_list, i);
     assert!(msg.is_ok());
@@ -1041,7 +1087,7 @@ fn test_mailbox_list() {
 }
 
 // address-list    =   (address *("," address)) / obs-addr-list
-pub fn address_list<I: U8Input + Debug>(i: I) -> SimpleResult<I, Vec<Address>> {
+pub fn address_list<I: U8Input>(i: I) -> SimpleResult<I, Vec<Address>> {
     or(i,
        |i| {
            address(i).bind(|i, ad1| {
@@ -1085,7 +1131,7 @@ fn test_address_list() {
 
 // group-list      =   mailbox-list / CFWS / obs-group-list
 // NOTE: Ignoring obs-group-list, as it appears to be wrong
-pub fn group_list<I: U8Input + Debug>(i: I) -> SimpleResult<I, Option<Vec<Address>>> {
+pub fn group_list<I: U8Input>(i: I) -> SimpleResult<I, Option<Vec<Address>>> {
     or(i,
        |i| mailbox_list(i).map(|v| Some(v)),
        |i| cfws(i).map(|_| None))
@@ -1093,7 +1139,7 @@ pub fn group_list<I: U8Input + Debug>(i: I) -> SimpleResult<I, Option<Vec<Addres
 
 //
 // addr-spec       =   local-part "@" domain
-pub fn addr_spec<I: U8Input + Debug>(i: I) -> SimpleResult<I, (Bytes, Bytes)> {
+pub fn addr_spec<I: U8Input>(i: I) -> SimpleResult<I, (Bytes, Bytes)> {
     local_part(i).bind(|i, l| {
         token(i, b'@').then(|i| {
             domain(i).bind(|i, d| {
@@ -1124,7 +1170,7 @@ fn test_addr_spec() {
 
 
 // local-part      =   dot-atom / quoted-string / obs-local-part
-pub fn local_part<I: U8Input + Debug>(i: I) -> SimpleResult<I, Bytes> {
+pub fn local_part<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
     or(i,
        dot_atom,
        |i| or(i,
@@ -1146,7 +1192,7 @@ fn test_local_part() {
 
 // domain          =   dot-atom / domain-literal / obs-domain
 // TODO: Support new fields
-pub fn domain<I: U8Input + Debug>(i: I) -> SimpleResult<I, Bytes> {
+pub fn domain<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
     obs_domain(i).map(|buf| Bytes::from_slice(&buf.into_vec()))
 }
 
@@ -1201,7 +1247,7 @@ const DTEXT: [bool; 256] = [
     false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, // 220 - 239
     false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false                              // 240 - 256
 ];
-pub fn dtext<I: U8Input + Debug>(i: I) -> SimpleResult<I, u8> {
+pub fn dtext<I: U8Input>(i: I) -> SimpleResult<I, u8> {
     or(i,
        |i| satisfy(i, |c| DTEXT[c as usize]),
        quoted_pair)
@@ -1210,9 +1256,7 @@ pub fn dtext<I: U8Input + Debug>(i: I) -> SimpleResult<I, u8> {
 // message         =   (fields / obs-fields)
 //                     [CRLF body]
 // TODO: Support new fields
-pub fn message<I: U8Input + Debug>(i: I) -> SimpleResult<I, Message> {
-    println!("message: {:?}", i);
-
+pub fn message<I: U8Input>(i: I) -> SimpleResult<I, Message> {
     or(i, fields, obs_fields).bind(|i, f| {
         option(i, |i| {
             crlf(i).then(|i| {
@@ -1223,14 +1267,26 @@ pub fn message<I: U8Input + Debug>(i: I) -> SimpleResult<I, Message> {
                 fields: f,
                 body: b.map(|buf| Bytes::from_slice(&buf.into_vec())),
             };
+            debug!("parsed message");
+
             i.ret(message)
+        })
+    })
+}
+
+pub fn message_eof<I: U8Input>(i: I) -> SimpleResult<I, Message> {
+    message(i).bind(|i, m| {
+        eof(i).then(|i| {
+            debug!("parsed message-eof");
+
+            i.ret(m)
         })
     })
 }
 
 // body            =   (*(*998text CRLF) *998text) / obs-body
 // TODO: support new fields
-pub fn body<I: U8Input + Debug>(i: I) -> SimpleResult<I, I::Buffer> {
+pub fn body<I: U8Input>(i: I) -> SimpleResult<I, I::Buffer> {
     obs_body(i)
 }
 
@@ -1254,7 +1310,7 @@ const TEXT: [bool; 256] = [
     false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, // 220 - 239
     false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false                              // 240 - 256
 ];
-pub fn text<I: U8Input + Debug>(i: I) -> SimpleResult<I, u8> {
+pub fn text<I: U8Input>(i: I) -> SimpleResult<I, u8> {
     satisfy(i, |c| TEXT[c as usize])
 }
 
@@ -1323,11 +1379,12 @@ pub fn text<I: U8Input + Debug>(i: I) -> SimpleResult<I, u8> {
 // NOTE: Technically we should only parse obsolete fields or new fields, based on
 // message = (fields / obs-fields).  Since I'm lazy and don't feel like 
 // implementing all the new parsers, I'm going to just mix them up in here
-pub fn fields<I: U8Input + Debug>(i: I) -> SimpleResult<I, Vec<Field>> {
+pub fn fields<I: U8Input>(i: I) -> SimpleResult<I, Vec<Field>> {
     // NOTE: REALLY wish the parser macro worked right about here
     many(i, |i| {
         or(i,       received,
         |i| or(i,   obs_orig_date,
+        |i| or(i,   from,
         |i| or(i,   obs_from,
         |i| or(i,   obs_sender,
         |i| or(i,   obs_reply_to,
@@ -1346,7 +1403,7 @@ pub fn fields<I: U8Input + Debug>(i: I) -> SimpleResult<I, Vec<Field>> {
         |i| or(i,   obs_resent_mid,
         |i| or(i,   obs_resent_rply,
                     obs_optional,
-                    )))))))))))))))))))
+                    ))))))))))))))))))))
     })
 }
  
@@ -1354,7 +1411,26 @@ pub fn fields<I: U8Input + Debug>(i: I) -> SimpleResult<I, Vec<Field>> {
 // orig-date       =   "Date:" date-time CRLF
 //
 // from            =   "From:" mailbox-list CRLF
-//
+pub fn from<I: U8Input>(i: I) -> SimpleResult<I, Field> {
+    string(i, b"From:").then(|i| {
+        mailbox_list(i).bind(|i, mbs| {
+            crlf(i).then(|i| {
+                let value = AddressesField {addresses: mbs};
+                debug!("parsed from");
+
+                i.ret(Field::From(value))
+            })
+        })
+    })
+}
+
+#[test]
+fn test_from() {
+    let i = b"From: =?utf-8?Q?Humble=20Bundle?= <contact@humblebundle.com>\x0d\x0a";
+    let msg = parse_only(obs_from, i);
+    assert!(msg.is_ok());
+}
+
 // sender          =   "Sender:" mailbox CRLF
 //
 // reply-to        =   "Reply-To:" address-list CRLF
@@ -1372,7 +1448,7 @@ pub fn fields<I: U8Input + Debug>(i: I) -> SimpleResult<I, Vec<Field>> {
 // references      =   "References:" 1*msg-id CRLF
 //
 // msg-id          =   [CFWS] "<" id-left "@" id-right ">" [CFWS]
-pub fn msg_id<I: U8Input + Debug>(i: I) -> SimpleResult<I, MessageID> {
+pub fn msg_id<I: U8Input>(i: I) -> SimpleResult<I, MessageID> {
     option(i, drop_cfws, ()).then(|i| {
         token(i, b'<').then(|i| {
             id_left(i).bind(|i, l| {
@@ -1384,6 +1460,8 @@ pub fn msg_id<I: U8Input + Debug>(i: I) -> SimpleResult<I, MessageID> {
                                     id_left: l,
                                     id_right: r,
                                 };
+                                debug!("parsed msg-id");
+
                                 i.ret(message_id)
                             })
                         })
@@ -1395,14 +1473,14 @@ pub fn msg_id<I: U8Input + Debug>(i: I) -> SimpleResult<I, MessageID> {
 }
 
 // id-left         =   dot-atom-text / obs-id-left
-pub fn id_left<I: U8Input + Debug>(i: I) -> SimpleResult<I, Bytes> {
+pub fn id_left<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
     or(i, 
        |i| dot_atom_text(i).map(|buf| Bytes::from_slice(&buf.into_vec())), 
        obs_id_left)
 }
 
 // id-right        =   dot-atom-text / no-fold-literal / obs-id-right
-pub fn id_right<I: U8Input + Debug>(i: I) -> SimpleResult<I, Bytes> {
+pub fn id_right<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
     or(i, 
        |i| dot_atom_text(i).map(|buf| Bytes::from_slice(&buf.into_vec())), 
        |i| or(i, 
@@ -1411,7 +1489,7 @@ pub fn id_right<I: U8Input + Debug>(i: I) -> SimpleResult<I, Bytes> {
 }
 
 // no-fold-literal =   "[" *dtext "]"
-pub fn no_fold_literal<I: U8Input + Debug>(i: I) -> SimpleResult<I, I::Buffer> {
+pub fn no_fold_literal<I: U8Input>(i: I) -> SimpleResult<I, I::Buffer> {
     token(i, b'[').then(|i| {
         matched_by(i, |i| {
             skip_many(i, dtext)
@@ -1451,13 +1529,9 @@ pub fn no_fold_literal<I: U8Input + Debug>(i: I) -> SimpleResult<I, I::Buffer> {
 // path            =   angle-addr / ([CFWS] "<" [CFWS] ">" [CFWS])
 
 // received        =   "Received:" *received-token ";" date-time CRLF
-pub fn received<I: U8Input + Debug>(i: I) -> SimpleResult<I, Field> {
-    println!("received {:?}", i);
-
+pub fn received<I: U8Input>(i: I) -> SimpleResult<I, Field> {
     string(i, b"Received:").then(|i| {
-        println!("received.string {:?}", i);
         many(i, received_token).bind(|i, tokens: Vec<Bytes>| {
-            println!("received.many {:?}", i);
             token(i, b';').then(|i| {
                 date_time(i).bind(|i, dt| {
                     crlf(i).then(|i| {
@@ -1465,6 +1539,7 @@ pub fn received<I: U8Input + Debug>(i: I) -> SimpleResult<I, Field> {
                             date_time: dt,
                             tokens: tokens,
                         };
+                        debug!("parsed received");
 
                         i.ret(Field::Received(value))
                     })
@@ -1479,7 +1554,6 @@ fn test_received() {
     let i = b"Received: from machine.example by x.y.test; 21 Nov 1997 10:01:22 -0600\x0d\x0a";
     let msg = parse_only(received, i);
     assert!(msg.is_ok());
-    println!("parsed received: {:?}", msg.unwrap());
 }
 
 // Received: from x.y.test
@@ -1493,9 +1567,7 @@ fn test_received() {
 // received-token  =   word / angle-addr / addr-spec / domain
 // NOTE: matching word last, since it's the most restrictive
 //                 =   angle-addr / addr-spec / domain / word
-pub fn received_token<I: U8Input + Debug>(i: I) -> SimpleResult<I, Bytes> {
-    println!("received-token {:?}", i);
-
+pub fn received_token<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
     or(i,
        |i| matched_by(i, angle_addr).map(|(buf, _)| Bytes::from_slice(&buf.into_vec())),
        |i| or(i,
@@ -1516,8 +1588,7 @@ fn test_received_token() {
 // optional-field  =   field-name ":" unstructured CRLF
 //
 // field-name      =   1*ftext
-pub fn field_name<I: U8Input + Debug>(i: I) -> SimpleResult<I, I::Buffer> {
-    println!("field-name {:?}", i);
+pub fn field_name<I: U8Input>(i: I) -> SimpleResult<I, I::Buffer> {
 	matched_by(i, |i| {
         skip_many1(i, ftext)
 	}).map(|(buf, ())| {
@@ -1544,7 +1615,7 @@ const FTEXT: [bool; 256] = [
     false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, // 220 - 239
     false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false                              // 240 - 256
 ];
-pub fn ftext<I: U8Input + Debug>(i: I) -> SimpleResult<I, u8> {
+pub fn ftext<I: U8Input>(i: I) -> SimpleResult<I, u8> {
     satisfy(i, |c| FTEXT[c as usize])
 }
 
@@ -1569,17 +1640,17 @@ const OBS_NO_WS_CTL: [bool; 256] = [
     false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, // 220 - 239
     false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false                              // 240 - 256
 ];
-pub fn obs_no_ws_ctl<I: U8Input + Debug>(i: I) -> SimpleResult<I, u8> {
+pub fn obs_no_ws_ctl<I: U8Input>(i: I) -> SimpleResult<I, u8> {
     satisfy(i, |c| OBS_NO_WS_CTL[c as usize])
 }
 
 // obs-ctext       =   obs-NO-WS-CTL
-pub fn obs_ctext<I: U8Input + Debug>(i: I) -> SimpleResult<I, u8> {
+pub fn obs_ctext<I: U8Input>(i: I) -> SimpleResult<I, u8> {
 	obs_no_ws_ctl(i)
 }
 
 // obs-qtext       =   obs-NO-WS-CTL
-pub fn obs_qtext<I: U8Input + Debug>(i: I) -> SimpleResult<I, u8> {
+pub fn obs_qtext<I: U8Input>(i: I) -> SimpleResult<I, u8> {
 	obs_no_ws_ctl(i)
 }
 
@@ -1591,13 +1662,13 @@ pub fn obs_qtext<I: U8Input + Debug>(i: I) -> SimpleResult<I, u8> {
 //                     %d14-31 /
 //                     %d33-126 /
 //                     %d127
-pub fn obs_utext<I: U8Input + Debug>(i: I) -> SimpleResult<I, u8> {
+pub fn obs_utext<I: U8Input>(i: I) -> SimpleResult<I, u8> {
 	or(i, 
        |i| satisfy(i, |i| i == 0),
        |i| or(i, obs_no_ws_ctl, vchar))
 }
 
-pub fn many1_obs_utext<I: U8Input + Debug>(i: I) -> SimpleResult<I, I::Buffer> {
+pub fn many1_obs_utext<I: U8Input>(i: I) -> SimpleResult<I, I::Buffer> {
     matched_by(i, |i| {
         skip_many1(i, obs_utext)
     }).map(|(buf, _)| buf)
@@ -1607,7 +1678,7 @@ pub fn many1_obs_utext<I: U8Input + Debug>(i: I) -> SimpleResult<I, I::Buffer> {
 // Where any quoted-pair appears, it is to be interpreted as the
 // character alone.  That is to say, the "\" character that appears as
 // part of a quoted-pair is semantically "invisible".
-pub fn obs_qp<I: U8Input + Debug>(i: I) -> SimpleResult<I, u8> {
+pub fn obs_qp<I: U8Input>(i: I) -> SimpleResult<I, u8> {
     token(i, b'\\').then(|i| {
         or(i,
            |i| satisfy(i, |i| i == 0),
@@ -1622,7 +1693,7 @@ pub fn obs_qp<I: U8Input + Debug>(i: I) -> SimpleResult<I, u8> {
 // obs-body        =   *((*LF *CR *((%d0 / text) *LF *CR)) / CRLF)
 // NOTE: We're relying on this parser only ever being evaluated after the
 // header delimiter
-pub fn obs_body<I: U8Input + Debug>(i: I) -> SimpleResult<I, I::Buffer> {
+pub fn obs_body<I: U8Input>(i: I) -> SimpleResult<I, I::Buffer> {
     take_remainder(i)
 }
 
@@ -1658,8 +1729,7 @@ const LF_OBS_UTEXT: [bool; 256] = [
     false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, // 220 - 239
     false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false                              // 240 - 256
 ];
-pub fn obs_unstruct_crlf<I: U8Input + Debug>(i: I) -> SimpleResult<I, Bytes> {
-    println!("obs_unstruct_crlf {:?}", i);
+pub fn obs_unstruct_crlf<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
     many(i, |i| {
         or(i,
            |i| take_while1(i, |t| LF_OBS_UTEXT[t as usize]).map(|buf| Bytes::from_slice(&buf.into_vec())),
@@ -1671,7 +1741,7 @@ pub fn obs_unstruct_crlf<I: U8Input + Debug>(i: I) -> SimpleResult<I, Bytes> {
     })
 }
 
-pub fn many1_cr_not_lf<I: U8Input + Debug>(i: I) -> SimpleResult<I, Bytes> {
+pub fn many1_cr_not_lf<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
     matched_by(i, |i| {
         skip_many1(i, |i| {
             token(i, 13).then(|i| {
@@ -1701,21 +1771,16 @@ fn test_many1_cr_not_lf() {
 }
 
 // obs-phrase      =   word *(word / "." / CFWS)
-pub fn obs_phrase<I: U8Input + Debug>(i: I) -> SimpleResult<I, Bytes> {
-    println!("obs-phrase: {:?}", i);
+pub fn obs_phrase<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
     word(i).bind(|i, w1| {
-        println!("obs-phrase.word1: {:?}/{:?}", w1.clone(), i);
         many(i, |i| {
-            println!("obs-phrase.many: {:?}", i);
             or(i,
                word,
                |i| or(i,
                       |i| token(i, b'.').bind(|i, _| {
-                          println!("obs-phrase.token: {:?}", i);
                           i.ret(Bytes::from_slice(&[b'.']))
                       }),
                       |i| cfws(i).bind(|i, _| {
-                          println!("obs-phrase.cfws: {:?}", i);
                           i.ret(Bytes::empty())
                       })))
         }).map(|bufs: Vec<Bytes>| {
@@ -1732,7 +1797,7 @@ fn test_obs_phrase() {
 }
 
 // obs-phrase-list =   [phrase / CFWS] *("," [phrase / CFWS])
-pub fn obs_phrase_list<I: U8Input + Debug>(i: I) -> SimpleResult<I, Vec<Bytes>> {
+pub fn obs_phrase_list<I: U8Input>(i: I) -> SimpleResult<I, Vec<Bytes>> {
     option(i, |i| {
         or(i,
            |i| phrase(i).map(|buf| Some(buf)),
@@ -1765,7 +1830,7 @@ pub fn obs_phrase_list<I: U8Input + Debug>(i: I) -> SimpleResult<I, Vec<Bytes>> 
 }
 
 // obs-FWS         =   1*WSP *(CRLF 1*WSP)
-pub fn obs_fws<I: U8Input + Debug>(i: I) -> SimpleResult<I, Bytes> {
+pub fn obs_fws<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
     matched_by(i, |i| {
         skip_many1(i, wsp)
     }).bind(|i, (buf1, _)| {
@@ -1782,7 +1847,7 @@ pub fn obs_fws<I: U8Input + Debug>(i: I) -> SimpleResult<I, Bytes> {
 }
 
 // obs-day-of-week =   [CFWS] day-name [CFWS]
-pub fn obs_day_of_week<I: U8Input + Debug>(i: I) -> SimpleResult<I, Day> {
+pub fn obs_day_of_week<I: U8Input>(i: I) -> SimpleResult<I, Day> {
     option(i, drop_cfws, ()).then(|i| {
         day_name(i).bind(|i, d| {
             option(i, drop_cfws, ()).then(|i| {
@@ -1793,7 +1858,7 @@ pub fn obs_day_of_week<I: U8Input + Debug>(i: I) -> SimpleResult<I, Day> {
 }
 
 // obs-day         =   [CFWS] 1*2DIGIT [CFWS]
-pub fn obs_day<I: U8Input + Debug>(i: I) -> SimpleResult<I, usize> {
+pub fn obs_day<I: U8Input>(i: I) -> SimpleResult<I, usize> {
     option(i, drop_cfws, ()).then(|i| {
         parse_digits(i, (1..3)).bind(|i, n| {
             option(i, drop_cfws, ()).then(|i| {
@@ -1804,7 +1869,7 @@ pub fn obs_day<I: U8Input + Debug>(i: I) -> SimpleResult<I, usize> {
 }
 
 // obs-year        =   [CFWS] 2*DIGIT [CFWS]
-pub fn obs_year<I: U8Input + Debug>(i: I) -> SimpleResult<I, usize> {
+pub fn obs_year<I: U8Input>(i: I) -> SimpleResult<I, usize> {
     option(i, drop_cfws, ()).then(|i| {
         parse_digits(i, (2..4)).bind(|i, n| {
             option(i, drop_cfws, ()).then(|i| {
@@ -1815,7 +1880,7 @@ pub fn obs_year<I: U8Input + Debug>(i: I) -> SimpleResult<I, usize> {
 }
 
 // obs-hour        =   [CFWS] 2DIGIT [CFWS]
-pub fn obs_hour<I: U8Input + Debug>(i: I) -> SimpleResult<I, usize> {
+pub fn obs_hour<I: U8Input>(i: I) -> SimpleResult<I, usize> {
     option(i, drop_cfws, ()).then(|i| {
         parse_digits(i, 2).bind(|i, n| {
             option(i, drop_cfws, ()).then(|i| {
@@ -1826,7 +1891,7 @@ pub fn obs_hour<I: U8Input + Debug>(i: I) -> SimpleResult<I, usize> {
 }
 
 // obs-minute      =   [CFWS] 2DIGIT [CFWS]
-pub fn obs_minute<I: U8Input + Debug>(i: I) -> SimpleResult<I, usize> {
+pub fn obs_minute<I: U8Input>(i: I) -> SimpleResult<I, usize> {
     option(i, drop_cfws, ()).then(|i| {
         parse_digits(i, 2).bind(|i, n| {
             option(i, drop_cfws, ()).then(|i| {
@@ -1837,7 +1902,7 @@ pub fn obs_minute<I: U8Input + Debug>(i: I) -> SimpleResult<I, usize> {
 }
 
 // obs-second      =   [CFWS] 2DIGIT [CFWS]
-pub fn obs_second<I: U8Input + Debug>(i: I) -> SimpleResult<I, usize> {
+pub fn obs_second<I: U8Input>(i: I) -> SimpleResult<I, usize> {
     option(i, drop_cfws, ()).then(|i| {
         parse_digits(i, 2).bind(|i, n| {
             option(i, drop_cfws, ()).then(|i| {
@@ -1870,7 +1935,7 @@ pub fn obs_second<I: U8Input + Debug>(i: I) -> SimpleResult<I, usize> {
 //    PST is semantically equivalent to -0800
 //    
 // NOTE: Modifying to allow preceeding FWS
-pub fn obs_zone<I: U8Input + Debug>(i: I) -> SimpleResult<I, FixedOffset> {
+pub fn obs_zone<I: U8Input>(i: I) -> SimpleResult<I, FixedOffset> {
     fws(i).then(|i| {
         or(i, |i| string(i, b"UT").then(|i| i.ret(0)),
         |i| or(i, |i| string(i, b"GMT").then(|i| i.ret(0)),
@@ -1906,7 +1971,7 @@ fn test_obs_zone() {
 
 // obs-domain-list =   *(CFWS / ",") "@" domain
 //                     *("," [CFWS] ["@" domain])
-pub fn obs_domain_list<I: U8Input + Debug>(i: I) -> SimpleResult<I, Vec<Bytes>> {
+pub fn obs_domain_list<I: U8Input>(i: I) -> SimpleResult<I, Vec<Bytes>> {
     skip_many(i, |i| {
         or(i, drop_cfws, |i| token(i, b',').map(|_| ()))
     }).then(|i| {
@@ -1939,7 +2004,7 @@ pub fn obs_domain_list<I: U8Input + Debug>(i: I) -> SimpleResult<I, Vec<Bytes>> 
 }
 
 // obs-mbox-list   =   *([CFWS] ",") mailbox *("," [mailbox / CFWS])
-pub fn obs_mbox_list<I: U8Input + Debug>(i: I) -> SimpleResult<I, Vec<Address>> {
+pub fn obs_mbox_list<I: U8Input>(i: I) -> SimpleResult<I, Vec<Address>> {
     skip_many(i, |i| {
         option(i, drop_cfws, ()).then(|i| {
             token(i, b',')
@@ -1967,7 +2032,7 @@ pub fn obs_mbox_list<I: U8Input + Debug>(i: I) -> SimpleResult<I, Vec<Address>> 
 }
 
 // obs-addr-list   =   *([CFWS] ",") address *("," [address / CFWS])
-pub fn obs_addr_list<I: U8Input + Debug>(i: I) -> SimpleResult<I, Vec<Address>> {
+pub fn obs_addr_list<I: U8Input>(i: I) -> SimpleResult<I, Vec<Address>> {
     skip_many(i, |i| {
         option(i, drop_cfws, ()).then(|i| {
             token(i, b',')
@@ -1998,7 +2063,7 @@ pub fn obs_addr_list<I: U8Input + Debug>(i: I) -> SimpleResult<I, Vec<Address>> 
 // NOTE: Pretty sure this is wrong
 
 // obs-local-part  =   word *("." word)
-pub fn obs_local_part<I: U8Input + Debug>(i: I) -> SimpleResult<I, Bytes> {
+pub fn obs_local_part<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
     word(i).bind(|i, w1| {
         many(i, |i| {
             token(i, b'.').bind(|i, tok| {
@@ -2011,7 +2076,7 @@ pub fn obs_local_part<I: U8Input + Debug>(i: I) -> SimpleResult<I, Bytes> {
 }
 
 // obs-domain      =   atom *("." atom)
-pub fn obs_domain<I: U8Input + Debug>(i: I) -> SimpleResult<I, I::Buffer> {
+pub fn obs_domain<I: U8Input>(i: I) -> SimpleResult<I, I::Buffer> {
     matched_by(i, |i| {
         atom(i).then(|i| {
             skip_many(i, |i| {
@@ -2050,7 +2115,7 @@ pub fn obs_domain<I: U8Input + Debug>(i: I) -> SimpleResult<I, I::Buffer> {
 //                     obs-resent-mid /
 //                     obs-optional)
 // TODO: Parse actual fields
-pub fn obs_fields<I: U8Input + Debug>(i: I) -> SimpleResult<I, Vec<Field>> {
+pub fn obs_fields<I: U8Input>(i: I) -> SimpleResult<I, Vec<Field>> {
     // NOTE: REALLY wish the parser macro worked right about here
     many(i, |i| {
         or(i,       obs_orig_date,
@@ -2077,19 +2142,14 @@ pub fn obs_fields<I: U8Input + Debug>(i: I) -> SimpleResult<I, Vec<Field>> {
 }
 
 // obs-orig-date   =   "Date" *WSP ":" date-time CRLF
-pub fn obs_orig_date<I: U8Input + Debug>(i: I) -> SimpleResult<I, Field> {
-    println!("obs-orig-date {:?}", i);
+pub fn obs_orig_date<I: U8Input>(i: I) -> SimpleResult<I, Field> {
     string(i, b"Date").then(|i| {
-        println!("obs-orig-date.string(Date) {:?}", i);
         option(i, wsp, 0).then(|i| {
-            println!("obs-orig-date.wsp {:?}", i);
             token(i, b':').then(|i| {
-                println!("obs-orig-date.token(:) {:?}", i);
                 date_time(i).bind(|i, dt| {
-                    println!("obs-orig-date.date-time {:?}", i);
                     crlf(i).then(|i| {
-                        println!("obs-orig-date.crlf {:?}", i);
                         let value = DateTimeField {date_time: dt};
+                        debug!("parsed obs-orig-date");
 
                         i.ret(Field::Date(value))
                     })
@@ -2104,23 +2164,17 @@ fn test_obs_orig_date() {
     let i = b"Date: Fri, 21 Nov 1997 09:55:06 -0600\x0d\x0a";
     let msg = parse_only(obs_orig_date, i);
     assert!(msg.is_ok());
-    println!("parsed date: {:?}", msg.unwrap());
 }
 
 // obs-from        =   "From" *WSP ":" mailbox-list CRLF
-pub fn obs_from<I: U8Input + Debug>(i: I) -> SimpleResult<I, Field> {
-    println!("from {:?}", i);
+pub fn obs_from<I: U8Input>(i: I) -> SimpleResult<I, Field> {
     string(i, b"From").then(|i| {
-        println!("from.string {:?}", i);
         option(i, wsp, 0).then(|i| {
-            println!("from.wsp {:?}", i);
             token(i, b':').then(|i| {
-                println!("from.token {:?}", i);
                 mailbox_list(i).bind(|i, mbs| {
-                    println!("from.mailbox_list {:?}", i);
                     crlf(i).then(|i| {
-                        println!("from.crlf {:?}", i);
                         let value = AddressesField {addresses: mbs};
+                        debug!("parsed obs-from");
 
                         i.ret(Field::From(value))
                     })
@@ -2135,7 +2189,6 @@ fn test_obs_from() {
     let i = b"From: John Doe <jdoe@machine.example>\x0d\x0a";
     let msg = parse_only(obs_from, i);
     assert!(msg.is_ok());
-    println!("parsed from: {:?}", msg.unwrap());
 
     let i = b"From: \"Joe Q. Public\" <john.q.public@example.com>\x0d\x0a";
     let msg = parse_only(obs_from, i);
@@ -2152,13 +2205,14 @@ fn test_obs_from() {
 }
 
 // obs-sender      =   "Sender" *WSP ":" mailbox CRLF
-pub fn obs_sender<I: U8Input + Debug>(i: I) -> SimpleResult<I, Field> {
+pub fn obs_sender<I: U8Input>(i: I) -> SimpleResult<I, Field> {
     string(i, b"Sender").then(|i| {
         option(i, wsp, 0).then(|i| {
             token(i, b':').then(|i| {
                 mailbox(i).bind(|i, mb| {
                     crlf(i).then(|i| {
                         let value = AddressField {address: mb};
+                        debug!("parsed obs-sender");
 
                         i.ret(Field::Sender(value))
                     })
@@ -2169,13 +2223,14 @@ pub fn obs_sender<I: U8Input + Debug>(i: I) -> SimpleResult<I, Field> {
 }
 
 // obs-reply-to    =   "Reply-To" *WSP ":" address-list CRLF
-pub fn obs_reply_to<I: U8Input + Debug>(i: I) -> SimpleResult<I, Field> {
+pub fn obs_reply_to<I: U8Input>(i: I) -> SimpleResult<I, Field> {
     string(i, b"Reply-To").then(|i| {
         option(i, wsp, 0).then(|i| {
             token(i, b':').then(|i| {
                 address_list(i).bind(|i, mbs| {
                     crlf(i).then(|i| {
                         let value = AddressesField {addresses: mbs};
+                        debug!("parsed obs-reply-to");
 
                         i.ret(Field::ReplyTo(value))
                     })
@@ -2186,13 +2241,14 @@ pub fn obs_reply_to<I: U8Input + Debug>(i: I) -> SimpleResult<I, Field> {
 }
 
 // obs-to          =   "To" *WSP ":" address-list CRLF
-pub fn obs_to<I: U8Input + Debug>(i: I) -> SimpleResult<I, Field> {
+pub fn obs_to<I: U8Input>(i: I) -> SimpleResult<I, Field> {
     string(i, b"To").then(|i| {
         option(i, wsp, 0).then(|i| {
             token(i, b':').then(|i| {
                 address_list(i).bind(|i, mbs| {
                     crlf(i).then(|i| {
                         let value = AddressesField {addresses: mbs};
+                        debug!("parsed obs-to");
 
                         i.ret(Field::To(value))
                     })
@@ -2207,17 +2263,17 @@ fn test_obs_to() {
     let i = b"To: Mary Smith <mary@example.net>\x0d\x0a";
     let msg = parse_only(obs_to, i);
     assert!(msg.is_ok());
-    println!("parsed to: {:?}", msg.unwrap());
 }
 
 // obs-cc          =   "Cc" *WSP ":" address-list CRLF
-pub fn obs_cc<I: U8Input + Debug>(i: I) -> SimpleResult<I, Field> {
+pub fn obs_cc<I: U8Input>(i: I) -> SimpleResult<I, Field> {
     string(i, b"Cc").then(|i| {
         option(i, wsp, 0).then(|i| {
             token(i, b':').then(|i| {
                 address_list(i).bind(|i, mbs| {
                     crlf(i).then(|i| {
                         let value = AddressesField {addresses: mbs};
+                        debug!("parsed obs-cc");
 
                         i.ret(Field::Cc(value))
                     })
@@ -2231,13 +2287,14 @@ pub fn obs_cc<I: U8Input + Debug>(i: I) -> SimpleResult<I, Field> {
 //                     (address-list / (*([CFWS] ",") [CFWS])) CRLF
 //
 // obs-message-id  =   "Message-ID" *WSP ":" msg-id CRLF
-pub fn obs_message_id<I: U8Input + Debug>(i: I) -> SimpleResult<I, Field> {
+pub fn obs_message_id<I: U8Input>(i: I) -> SimpleResult<I, Field> {
     string(i, b"Message-ID").then(|i| {
         option(i, wsp, 0).then(|i| {
             token(i, b':').then(|i| {
                 msg_id(i).bind(|i, m| {
                     crlf(i).then(|i| {
                         let value = MessageIDField {message_id: m};
+                        debug!("parsed obs-message-id");
 
                         i.ret(Field::MessageID(value))
                     })
@@ -2252,13 +2309,12 @@ fn test_obs_message_id() {
     let i = b"Message-ID: <1234@local.machine.example>\x0d\x0a";
     let msg = parse_only(obs_message_id, i);
     assert!(msg.is_ok());
-    println!("parsed message-id: {:?}", msg.unwrap());
 }
 
 // obs-in-reply-to =   "In-Reply-To" *WSP ":" *(phrase / msg-id) CRLF
 //    For purposes of interpretation, the phrases in the "In-Reply-To:" and
 //    "References:" fields are ignored.
-pub fn obs_in_reply_to<I: U8Input + Debug>(i: I) -> SimpleResult<I, Field> {
+pub fn obs_in_reply_to<I: U8Input>(i: I) -> SimpleResult<I, Field> {
     string(i, b"In-Reply-To").then(|i| {
         option(i, wsp, 0).then(|i| {
             token(i, b':').then(|i| {
@@ -2273,6 +2329,7 @@ pub fn obs_in_reply_to<I: U8Input + Debug>(i: I) -> SimpleResult<I, Field> {
                             .map(|v| v.unwrap())
                             .collect::<Vec<MessageID>>();
                         let value = MessageIDsField {message_ids: message_ids};
+                        debug!("parsed obs-in-reply-to");
 
                         i.ret(Field::InReplyTo(value))
                     })
@@ -2285,7 +2342,7 @@ pub fn obs_in_reply_to<I: U8Input + Debug>(i: I) -> SimpleResult<I, Field> {
 // obs-references  =   "References" *WSP ":" *(phrase / msg-id) CRLF
 //    For purposes of interpretation, the phrases in the "In-Reply-To:" and
 //    "References:" fields are ignored.
-pub fn obs_references<I: U8Input + Debug>(i: I) -> SimpleResult<I, Field> {
+pub fn obs_references<I: U8Input>(i: I) -> SimpleResult<I, Field> {
     string(i, b"References").then(|i| {
         option(i, wsp, 0).then(|i| {
             token(i, b':').then(|i| {
@@ -2300,6 +2357,7 @@ pub fn obs_references<I: U8Input + Debug>(i: I) -> SimpleResult<I, Field> {
                             .map(|v| v.unwrap())
                             .collect::<Vec<MessageID>>();
                         let value = MessageIDsField {message_ids: message_ids};
+                        debug!("parsed obs-references");
 
                         i.ret(Field::References(value))
                     })
@@ -2314,31 +2372,26 @@ fn test_obs_references() {
     let i = b"References: <1234@local.machine.example>\x0d\x0a";
     let msg = parse_only(obs_references, i);
     assert!(msg.is_ok());
-    println!("parsed references: {:?}", msg.unwrap());
 }
 
 // obs-id-left     =   local-part
-pub fn obs_id_left<I: U8Input + Debug>(i: I) -> SimpleResult<I, Bytes> {
+pub fn obs_id_left<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
     local_part(i)
 }
 
 // obs-id-right    =   domain
-pub fn obs_id_right<I: U8Input + Debug>(i: I) -> SimpleResult<I, Bytes> {
+pub fn obs_id_right<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
     domain(i)
 }
 
 // obs-subject     =   "Subject" *WSP ":" unstructured CRLF
-pub fn obs_subject<I: U8Input + Debug>(i: I) -> SimpleResult<I, Field> {
-    println!("subject {:?}", i);
+pub fn obs_subject<I: U8Input>(i: I) -> SimpleResult<I, Field> {
     string(i, b"Subject").then(|i| {
-        println!("subject.string {:?}", i);
         option(i, wsp, 0).then(|i| {
-            println!("subject.wsp {:?}", i);
             token(i, b':').then(|i| {
-                println!("subject.token {:?}", i);
                 unstructured_crlf(i).bind(|i, v| {
-                    println!("subject.crlf {:?}", i);
                     let value = UnstructuredField {data: v};
+                    debug!("parsed obs-subject");
 
                     i.ret(Field::Subject(value))
                 })
@@ -2352,17 +2405,17 @@ fn test_obs_subject() {
     let i = b"Subject: Saying Hello\x0d\x0a";
     let msg = parse_only(obs_subject, i);
     assert!(msg.is_ok());
-    println!("parsed subject: {:?}", msg.unwrap());
 }
 
 
 // obs-comments    =   "Comments" *WSP ":" unstructured CRLF
-pub fn obs_comments<I: U8Input + Debug>(i: I) -> SimpleResult<I, Field> {
+pub fn obs_comments<I: U8Input>(i: I) -> SimpleResult<I, Field> {
     string(i, b"Comments").then(|i| {
         option(i, wsp, 0).then(|i| {
             token(i, b':').then(|i| {
                 unstructured_crlf(i).bind(|i, v| {
                     let value = UnstructuredField {data: v};
+                    debug!("parsed obs-comments");
 
                     i.ret(Field::Comments(value))
                 })
@@ -2374,13 +2427,14 @@ pub fn obs_comments<I: U8Input + Debug>(i: I) -> SimpleResult<I, Field> {
 // obs-keywords    =   "Keywords" *WSP ":" obs-phrase-list CRLF
 //
 // obs-resent-from =   "Resent-From" *WSP ":" mailbox-list CRLF
-pub fn obs_resent_from<I: U8Input + Debug>(i: I) -> SimpleResult<I, Field> {
+pub fn obs_resent_from<I: U8Input>(i: I) -> SimpleResult<I, Field> {
     string(i, b"Resent-From").then(|i| {
         option(i, wsp, 0).then(|i| {
             token(i, b':').then(|i| {
                 mailbox_list(i).bind(|i, mbs| {
                     crlf(i).then(|i| {
                         let value = AddressesField {addresses: mbs};
+                        debug!("parsed obs-resent-from");
 
                         i.ret(Field::ResentCc(value))
                     })
@@ -2391,13 +2445,14 @@ pub fn obs_resent_from<I: U8Input + Debug>(i: I) -> SimpleResult<I, Field> {
 }
 
 // obs-resent-send =   "Resent-Sender" *WSP ":" mailbox CRLF
-pub fn obs_resent_send<I: U8Input + Debug>(i: I) -> SimpleResult<I, Field> {
+pub fn obs_resent_send<I: U8Input>(i: I) -> SimpleResult<I, Field> {
     string(i, b"Resent-Sender").then(|i| {
         option(i, wsp, 0).then(|i| {
             token(i, b':').then(|i| {
                 mailbox(i).bind(|i, mb| {
                     crlf(i).then(|i| {
                         let value = AddressField {address: mb};
+                        debug!("parsed obs-resent-send");
 
                         i.ret(Field::ResentSender(value))
                     })
@@ -2408,13 +2463,14 @@ pub fn obs_resent_send<I: U8Input + Debug>(i: I) -> SimpleResult<I, Field> {
 }
 
 // obs-resent-date =   "Resent-Date" *WSP ":" date-time CRLF
-pub fn obs_resent_date<I: U8Input + Debug>(i: I) -> SimpleResult<I, Field> {
+pub fn obs_resent_date<I: U8Input>(i: I) -> SimpleResult<I, Field> {
     string(i, b"Resent-Date").then(|i| {
         option(i, wsp, 0).then(|i| {
             token(i, b':').then(|i| {
                 date_time(i).bind(|i, dt| {
                     crlf(i).then(|i| {
                         let value = DateTimeField {date_time: dt};
+                        debug!("parsed obs-resent-date");
 
                         i.ret(Field::ResentDate(value))
                     })
@@ -2425,13 +2481,14 @@ pub fn obs_resent_date<I: U8Input + Debug>(i: I) -> SimpleResult<I, Field> {
 }
 //
 // obs-resent-to   =   "Resent-To" *WSP ":" address-list CRLF
-pub fn obs_resent_to<I: U8Input + Debug>(i: I) -> SimpleResult<I, Field> {
+pub fn obs_resent_to<I: U8Input>(i: I) -> SimpleResult<I, Field> {
     string(i, b"Resent-To").then(|i| {
         option(i, wsp, 0).then(|i| {
             token(i, b':').then(|i| {
                 address_list(i).bind(|i, mbs| {
                     crlf(i).then(|i| {
                         let value = AddressesField {addresses: mbs};
+                        debug!("parsed obs-resent-to");
 
                         i.ret(Field::ResentTo(value))
                     })
@@ -2442,13 +2499,14 @@ pub fn obs_resent_to<I: U8Input + Debug>(i: I) -> SimpleResult<I, Field> {
 }
 
 // obs-resent-cc   =   "Resent-Cc" *WSP ":" address-list CRLF
-pub fn obs_resent_cc<I: U8Input + Debug>(i: I) -> SimpleResult<I, Field> {
+pub fn obs_resent_cc<I: U8Input>(i: I) -> SimpleResult<I, Field> {
     string(i, b"Resent-Cc").then(|i| {
         option(i, wsp, 0).then(|i| {
             token(i, b':').then(|i| {
                 address_list(i).bind(|i, mbs| {
                     crlf(i).then(|i| {
                         let value = AddressesField {addresses: mbs};
+                        debug!("parsed obs-resent-cc");
 
                         i.ret(Field::ResentCc(value))
                     })
@@ -2462,13 +2520,14 @@ pub fn obs_resent_cc<I: U8Input + Debug>(i: I) -> SimpleResult<I, Field> {
 //                     (address-list / (*([CFWS] ",") [CFWS])) CRLF
 //
 // obs-resent-mid  =   "Resent-Message-ID" *WSP ":" msg-id CRLF
-pub fn obs_resent_mid<I: U8Input + Debug>(i: I) -> SimpleResult<I, Field> {
+pub fn obs_resent_mid<I: U8Input>(i: I) -> SimpleResult<I, Field> {
     string(i, b"Resent-Message-ID").then(|i| {
         option(i, wsp, 0).then(|i| {
             token(i, b':').then(|i| {
                 msg_id(i).bind(|i, v| {
                     crlf(i).then(|i| {
                         let value = MessageIDField {message_id: v};
+                        debug!("parsed obs-resent-bcc");
 
                         i.ret(Field::ResentMessageID(value))
                     })
@@ -2479,13 +2538,14 @@ pub fn obs_resent_mid<I: U8Input + Debug>(i: I) -> SimpleResult<I, Field> {
 }
 
 // obs-resent-rply =   "Resent-Reply-To" *WSP ":" address-list CRLF
-pub fn obs_resent_rply<I: U8Input + Debug>(i: I) -> SimpleResult<I, Field> {
+pub fn obs_resent_rply<I: U8Input>(i: I) -> SimpleResult<I, Field> {
     string(i, b"Resent-Reply-To").then(|i| {
         option(i, wsp, 0).then(|i| {
             token(i, b':').then(|i| {
                 address_list(i).bind(|i, mbs| {
                     crlf(i).then(|i| {
                         let value = AddressesField {addresses: mbs};
+                        debug!("parsed obs-resent-rply");
 
                         i.ret(Field::ResentReplyTo(value))
                     })
@@ -2500,18 +2560,15 @@ pub fn obs_resent_rply<I: U8Input + Debug>(i: I) -> SimpleResult<I, Field> {
 // obs-received    =   "Received" *WSP ":" *received-token CRLF
 //
 // obs-optional    =   field-name *WSP ":" unstructured CRLF
-pub fn obs_optional<I: U8Input + Debug>(i: I) -> SimpleResult<I, Field> {
-    println!("obs_optional {:?}", i);
+pub fn obs_optional<I: U8Input>(i: I) -> SimpleResult<I, Field> {
     field_name(i).bind(|i, n| {
-        println!("obs_optional.field-name {:?}", i);
         option(i, wsp, 0).then(|i| {
-            println!("obs_optional.wsp {:?}", i);
             token(i, b':').then(|i| {
-                println!("obs_optional.token {:?}", i);
                 unstructured_crlf(i).bind(|i, v| {
                     // NOTE: `field-name` is "printable US-ASCII characters not including ':'"
                     let name = unsafe { String::from_utf8_unchecked(n.into_vec()) };
                     let value = UnstructuredField {data: v};
+                    debug!("parsed obs-optional {}", name);
 
                     i.ret(Field::Optional(name, value))
                 })
