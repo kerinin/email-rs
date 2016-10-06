@@ -1104,6 +1104,10 @@ pub fn address_list<I: U8Input>(i: I) -> SimpleResult<I, Vec<Address>> {
 
 #[test]
 fn test_address_list() {
+    let i = b" noreply <noreply@facebookmail.com>";
+    let msg = parse_only(address_list, i);
+    assert!(msg.is_ok());
+
     let i = b"John Doe <jdoe@machine(comment).  example>";
     let msg = parse_only(address_list, i);
     assert!(msg.is_ok());
@@ -1411,8 +1415,9 @@ pub fn fields<I: U8Input>(i: I) -> SimpleResult<I, Vec<Field>> {
 // orig-date       =   "Date:" date-time CRLF
 //
 // from            =   "From:" mailbox-list CRLF
+// NOTE: Accepting case-insensitive header name values
 pub fn from<I: U8Input>(i: I) -> SimpleResult<I, Field> {
-    string(i, b"From:").then(|i| {
+    downcased_string(i, b"From:").then(|i| {
         mailbox_list(i).bind(|i, mbs| {
             crlf(i).then(|i| {
                 let value = AddressesField {addresses: mbs};
@@ -1446,24 +1451,30 @@ fn test_from() {
 // in-reply-to     =   "In-Reply-To:" 1*msg-id CRLF
 //
 // references      =   "References:" 1*msg-id CRLF
-//
-// msg-id          =   [CFWS] "<" id-left "@" id-right ">" [CFWS]
+
+///! msg-id          =   [CFWS] "<" id-left "@" id-right ">" [CFWS]
+///!
+///! NOTE: Allowing the omission of ``id-left "@"`` to accomodate message IDs 
+///! formed like "<comm-tagged-1077147628989448>"
+///! msg-id          =   [CFWS] "<" ?(id-left "@") id-right ">" [CFWS]
 pub fn msg_id<I: U8Input>(i: I) -> SimpleResult<I, MessageID> {
     option(i, drop_cfws, ()).then(|i| {
         token(i, b'<').then(|i| {
-            id_left(i).bind(|i, l| {
-                token(i, b'@').then(|i| {
-                    id_right(i).bind(|i, r| {
-                        token(i, b'>').then(|i| {
-                            option(i, drop_cfws, ()).then(|i| {
-                                let message_id = MessageID{
-                                    id_left: l,
-                                    id_right: r,
-                                };
-                                debug!("parsed msg-id");
+            option(i, |i| {
+                id_left(i).bind(|i, l| {
+                    token(i, b'@').then(|i| i.ret(l))
+                })
+            }, Bytes::empty()).bind(|i, l| {
+                id_right(i).bind(|i, r| {
+                    token(i, b'>').then(|i| {
+                        option(i, drop_cfws, ()).then(|i| {
+                            let message_id = MessageID{
+                                id_left: l,
+                                id_right: r,
+                            };
+                            debug!("parsed msg-id");
 
-                                i.ret(message_id)
-                            })
+                            i.ret(message_id)
                         })
                     })
                 })
@@ -1529,8 +1540,9 @@ pub fn no_fold_literal<I: U8Input>(i: I) -> SimpleResult<I, I::Buffer> {
 // path            =   angle-addr / ([CFWS] "<" [CFWS] ">" [CFWS])
 
 // received        =   "Received:" *received-token ";" date-time CRLF
+// NOTE: Accepting case-insensitive header name values
 pub fn received<I: U8Input>(i: I) -> SimpleResult<I, Field> {
-    string(i, b"Received:").then(|i| {
+    downcased_string(i, b"Received:").then(|i| {
         many(i, received_token).bind(|i, tokens: Vec<Bytes>| {
             token(i, b';').then(|i| {
                 date_time(i).bind(|i, dt| {
@@ -1579,6 +1591,10 @@ pub fn received_token<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
 
 #[test]
 fn test_received_token() {
+    let i = b" from ";
+    let msg = parse_only(received_token, i);
+    assert!(msg.is_ok());
+
     let i = b"x.y.test;";
     let msg = parse_only(received_token, i);
     assert!(msg.is_ok());
@@ -2142,8 +2158,9 @@ pub fn obs_fields<I: U8Input>(i: I) -> SimpleResult<I, Vec<Field>> {
 }
 
 // obs-orig-date   =   "Date" *WSP ":" date-time CRLF
+// NOTE: Accepting case-insensitive header name values
 pub fn obs_orig_date<I: U8Input>(i: I) -> SimpleResult<I, Field> {
-    string(i, b"Date").then(|i| {
+    downcased_string(i, b"Date").then(|i| {
         option(i, wsp, 0).then(|i| {
             token(i, b':').then(|i| {
                 date_time(i).bind(|i, dt| {
@@ -2161,14 +2178,23 @@ pub fn obs_orig_date<I: U8Input>(i: I) -> SimpleResult<I, Field> {
 
 #[test]
 fn test_obs_orig_date() {
+    let i = b"Date: 21 Sep 16 19:51 UTC\x0d\x0a";
+    let msg = parse_only(obs_orig_date, i);
+    assert!(msg.is_ok());
+
+    let i = b"Date: Thu, 22 Sep 2016 1:46:40 -0700\x0d\x0a";
+    let msg = parse_only(obs_orig_date, i);
+    assert!(msg.is_ok());
+
     let i = b"Date: Fri, 21 Nov 1997 09:55:06 -0600\x0d\x0a";
     let msg = parse_only(obs_orig_date, i);
     assert!(msg.is_ok());
 }
 
 // obs-from        =   "From" *WSP ":" mailbox-list CRLF
+// NOTE: Accepting case-insensitive header name values
 pub fn obs_from<I: U8Input>(i: I) -> SimpleResult<I, Field> {
-    string(i, b"From").then(|i| {
+    downcased_string(i, b"From").then(|i| {
         option(i, wsp, 0).then(|i| {
             token(i, b':').then(|i| {
                 mailbox_list(i).bind(|i, mbs| {
@@ -2205,8 +2231,9 @@ fn test_obs_from() {
 }
 
 // obs-sender      =   "Sender" *WSP ":" mailbox CRLF
+// NOTE: Accepting case-insensitive header name values
 pub fn obs_sender<I: U8Input>(i: I) -> SimpleResult<I, Field> {
-    string(i, b"Sender").then(|i| {
+    downcased_string(i, b"Sender").then(|i| {
         option(i, wsp, 0).then(|i| {
             token(i, b':').then(|i| {
                 mailbox(i).bind(|i, mb| {
@@ -2223,8 +2250,9 @@ pub fn obs_sender<I: U8Input>(i: I) -> SimpleResult<I, Field> {
 }
 
 // obs-reply-to    =   "Reply-To" *WSP ":" address-list CRLF
+// NOTE: Accepting case-insensitive header name values
 pub fn obs_reply_to<I: U8Input>(i: I) -> SimpleResult<I, Field> {
-    string(i, b"Reply-To").then(|i| {
+    downcased_string(i, b"Reply-To").then(|i| {
         option(i, wsp, 0).then(|i| {
             token(i, b':').then(|i| {
                 address_list(i).bind(|i, mbs| {
@@ -2240,9 +2268,21 @@ pub fn obs_reply_to<I: U8Input>(i: I) -> SimpleResult<I, Field> {
     })
 }
 
+#[test]
+fn test_obs_reply_to() {
+    let i = b"Reply-to: \x0d\x0a";
+    let msg = parse_only(obs_reply_to, i);
+    assert!(msg.is_ok());
+
+    let i = b"Reply-to: noreply <noreply@facebookmail.com>\x0d\x0a";
+    let msg = parse_only(obs_reply_to, i);
+    assert!(msg.is_ok());
+}
+
 // obs-to          =   "To" *WSP ":" address-list CRLF
+// NOTE: Accepting case-insensitive header name values
 pub fn obs_to<I: U8Input>(i: I) -> SimpleResult<I, Field> {
-    string(i, b"To").then(|i| {
+    downcased_string(i, b"To").then(|i| {
         option(i, wsp, 0).then(|i| {
             token(i, b':').then(|i| {
                 address_list(i).bind(|i, mbs| {
@@ -2266,8 +2306,9 @@ fn test_obs_to() {
 }
 
 // obs-cc          =   "Cc" *WSP ":" address-list CRLF
+// NOTE: Accepting case-insensitive header name values
 pub fn obs_cc<I: U8Input>(i: I) -> SimpleResult<I, Field> {
-    string(i, b"Cc").then(|i| {
+    downcased_string(i, b"Cc").then(|i| {
         option(i, wsp, 0).then(|i| {
             token(i, b':').then(|i| {
                 address_list(i).bind(|i, mbs| {
@@ -2287,8 +2328,9 @@ pub fn obs_cc<I: U8Input>(i: I) -> SimpleResult<I, Field> {
 //                     (address-list / (*([CFWS] ",") [CFWS])) CRLF
 //
 // obs-message-id  =   "Message-ID" *WSP ":" msg-id CRLF
+// NOTE: Accepting case-insensitive header name values
 pub fn obs_message_id<I: U8Input>(i: I) -> SimpleResult<I, Field> {
-    string(i, b"Message-ID").then(|i| {
+    downcased_string(i, b"Message-ID").then(|i| {
         option(i, wsp, 0).then(|i| {
             token(i, b':').then(|i| {
                 msg_id(i).bind(|i, m| {
@@ -2314,8 +2356,9 @@ fn test_obs_message_id() {
 // obs-in-reply-to =   "In-Reply-To" *WSP ":" *(phrase / msg-id) CRLF
 //    For purposes of interpretation, the phrases in the "In-Reply-To:" and
 //    "References:" fields are ignored.
+// NOTE: Accepting case-insensitive header name values
 pub fn obs_in_reply_to<I: U8Input>(i: I) -> SimpleResult<I, Field> {
-    string(i, b"In-Reply-To").then(|i| {
+    downcased_string(i, b"In-Reply-To").then(|i| {
         option(i, wsp, 0).then(|i| {
             token(i, b':').then(|i| {
                 many(i, |i| {
@@ -2342,8 +2385,9 @@ pub fn obs_in_reply_to<I: U8Input>(i: I) -> SimpleResult<I, Field> {
 // obs-references  =   "References" *WSP ":" *(phrase / msg-id) CRLF
 //    For purposes of interpretation, the phrases in the "In-Reply-To:" and
 //    "References:" fields are ignored.
+// NOTE: Accepting case-insensitive header name values
 pub fn obs_references<I: U8Input>(i: I) -> SimpleResult<I, Field> {
-    string(i, b"References").then(|i| {
+    downcased_string(i, b"References").then(|i| {
         option(i, wsp, 0).then(|i| {
             token(i, b':').then(|i| {
                 many(i, |i| {
@@ -2369,6 +2413,10 @@ pub fn obs_references<I: U8Input>(i: I) -> SimpleResult<I, Field> {
 
 #[test]
 fn test_obs_references() {
+    let i = b"References: <comm-tagged-1077147628989448>\x0d\x0a";
+    let msg = parse_only(obs_references, i);
+    assert!(msg.is_ok());
+
     let i = b"References: <1234@local.machine.example>\x0d\x0a";
     let msg = parse_only(obs_references, i);
     assert!(msg.is_ok());
@@ -2385,8 +2433,9 @@ pub fn obs_id_right<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
 }
 
 // obs-subject     =   "Subject" *WSP ":" unstructured CRLF
+// NOTE: Accepting case-insensitive header name values
 pub fn obs_subject<I: U8Input>(i: I) -> SimpleResult<I, Field> {
-    string(i, b"Subject").then(|i| {
+    downcased_string(i, b"Subject").then(|i| {
         option(i, wsp, 0).then(|i| {
             token(i, b':').then(|i| {
                 unstructured_crlf(i).bind(|i, v| {
@@ -2409,8 +2458,9 @@ fn test_obs_subject() {
 
 
 // obs-comments    =   "Comments" *WSP ":" unstructured CRLF
+// NOTE: Accepting case-insensitive header name values
 pub fn obs_comments<I: U8Input>(i: I) -> SimpleResult<I, Field> {
-    string(i, b"Comments").then(|i| {
+    downcased_string(i, b"Comments").then(|i| {
         option(i, wsp, 0).then(|i| {
             token(i, b':').then(|i| {
                 unstructured_crlf(i).bind(|i, v| {
@@ -2427,8 +2477,9 @@ pub fn obs_comments<I: U8Input>(i: I) -> SimpleResult<I, Field> {
 // obs-keywords    =   "Keywords" *WSP ":" obs-phrase-list CRLF
 //
 // obs-resent-from =   "Resent-From" *WSP ":" mailbox-list CRLF
+// NOTE: Accepting case-insensitive header name values
 pub fn obs_resent_from<I: U8Input>(i: I) -> SimpleResult<I, Field> {
-    string(i, b"Resent-From").then(|i| {
+    downcased_string(i, b"Resent-From").then(|i| {
         option(i, wsp, 0).then(|i| {
             token(i, b':').then(|i| {
                 mailbox_list(i).bind(|i, mbs| {
@@ -2445,8 +2496,9 @@ pub fn obs_resent_from<I: U8Input>(i: I) -> SimpleResult<I, Field> {
 }
 
 // obs-resent-send =   "Resent-Sender" *WSP ":" mailbox CRLF
+// NOTE: Accepting case-insensitive header name values
 pub fn obs_resent_send<I: U8Input>(i: I) -> SimpleResult<I, Field> {
-    string(i, b"Resent-Sender").then(|i| {
+    downcased_string(i, b"Resent-Sender").then(|i| {
         option(i, wsp, 0).then(|i| {
             token(i, b':').then(|i| {
                 mailbox(i).bind(|i, mb| {
@@ -2463,8 +2515,9 @@ pub fn obs_resent_send<I: U8Input>(i: I) -> SimpleResult<I, Field> {
 }
 
 // obs-resent-date =   "Resent-Date" *WSP ":" date-time CRLF
+// NOTE: Accepting case-insensitive header name values
 pub fn obs_resent_date<I: U8Input>(i: I) -> SimpleResult<I, Field> {
-    string(i, b"Resent-Date").then(|i| {
+    downcased_string(i, b"Resent-Date").then(|i| {
         option(i, wsp, 0).then(|i| {
             token(i, b':').then(|i| {
                 date_time(i).bind(|i, dt| {
@@ -2481,8 +2534,9 @@ pub fn obs_resent_date<I: U8Input>(i: I) -> SimpleResult<I, Field> {
 }
 //
 // obs-resent-to   =   "Resent-To" *WSP ":" address-list CRLF
+// NOTE: Accepting case-insensitive header name values
 pub fn obs_resent_to<I: U8Input>(i: I) -> SimpleResult<I, Field> {
-    string(i, b"Resent-To").then(|i| {
+    downcased_string(i, b"Resent-To").then(|i| {
         option(i, wsp, 0).then(|i| {
             token(i, b':').then(|i| {
                 address_list(i).bind(|i, mbs| {
@@ -2499,8 +2553,9 @@ pub fn obs_resent_to<I: U8Input>(i: I) -> SimpleResult<I, Field> {
 }
 
 // obs-resent-cc   =   "Resent-Cc" *WSP ":" address-list CRLF
+// NOTE: Accepting case-insensitive header name values
 pub fn obs_resent_cc<I: U8Input>(i: I) -> SimpleResult<I, Field> {
-    string(i, b"Resent-Cc").then(|i| {
+    downcased_string(i, b"Resent-Cc").then(|i| {
         option(i, wsp, 0).then(|i| {
             token(i, b':').then(|i| {
                 address_list(i).bind(|i, mbs| {
@@ -2520,8 +2575,9 @@ pub fn obs_resent_cc<I: U8Input>(i: I) -> SimpleResult<I, Field> {
 //                     (address-list / (*([CFWS] ",") [CFWS])) CRLF
 //
 // obs-resent-mid  =   "Resent-Message-ID" *WSP ":" msg-id CRLF
+// NOTE: Accepting case-insensitive header name values
 pub fn obs_resent_mid<I: U8Input>(i: I) -> SimpleResult<I, Field> {
-    string(i, b"Resent-Message-ID").then(|i| {
+    downcased_string(i, b"Resent-Message-ID").then(|i| {
         option(i, wsp, 0).then(|i| {
             token(i, b':').then(|i| {
                 msg_id(i).bind(|i, v| {
@@ -2538,8 +2594,9 @@ pub fn obs_resent_mid<I: U8Input>(i: I) -> SimpleResult<I, Field> {
 }
 
 // obs-resent-rply =   "Resent-Reply-To" *WSP ":" address-list CRLF
+// NOTE: Accepting case-insensitive header name values
 pub fn obs_resent_rply<I: U8Input>(i: I) -> SimpleResult<I, Field> {
-    string(i, b"Resent-Reply-To").then(|i| {
+    downcased_string(i, b"Resent-Reply-To").then(|i| {
         option(i, wsp, 0).then(|i| {
             token(i, b':').then(|i| {
                 address_list(i).bind(|i, mbs| {
