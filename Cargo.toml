@@ -11,13 +11,14 @@ path = "src/lib.rs"
 name = "parse"
 path = "src/parse.rs"
 
+[[bench]]
+name = "example"
+harness = false
+
 [dependencies]
 chomp = "*"
 chrono = "*"
 bytes = "0.3.0"
 log = "0.3"
 env_logger = "*"
-
-[[bench]]
-name = "example"
-harness = false
+bencher = "*"

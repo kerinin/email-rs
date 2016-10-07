@@ -2,6 +2,7 @@
 
 use std::fmt::Debug;
 
+use chrono::Datelike;
 use chrono::datetime::DateTime;
 use chrono::offset::LocalResult;
 use chrono::offset::TimeZone;
@@ -9,6 +10,7 @@ use chrono::offset::fixed::FixedOffset;
 use chrono::naive::datetime::NaiveDateTime;
 use chrono::naive::time::NaiveTime;
 use chrono::naive::date::NaiveDate;
+use chrono::offset::utc::UTC;
 use bytes::{Bytes, ByteStr};
 
 use chomp::*;
@@ -605,6 +607,11 @@ pub fn date_time<I: U8Input>(i: I) -> SimpleResult<I, DateTime<FixedOffset>> {
 
 #[test]
 fn test_date_time() {
+    let i = b"21 Sep 16 19:51 UTC";
+    let msg = parse_only(date_time, i);
+    assert!(msg.is_ok());
+    assert_eq!(msg.unwrap(), FixedOffset::east(0).ymd(2016, 9, 21).and_hms(19,51,0));
+
     let i = b"Fri, 21 Nov 1997 09:55:06 -0600";
     let msg = parse_only(date_time, i);
     assert!(msg.is_ok());
@@ -644,8 +651,17 @@ pub fn date<I: U8Input>(i: I) -> SimpleResult<I, NaiveDate> {
     day(i).bind(|i, d| {
         month(i).bind(|i, m| {
             year(i).bind(|i, mut y| {
+                // NOTE: For two-digit years, assume the century is either the
+                // current one or the last one, and that the message date is in 
+                // the past
+                let this_year: usize = UTC::today().year() as usize;
                 if y < 100 {
-                    y += 1900
+                    let prefix = (this_year / 100) * 100;
+                    if y + prefix <= this_year {
+                        y += prefix;
+                    } else {
+                        y += prefix - 100;
+                    }
                 }
                 match NaiveDate::from_ymd_opt(y as i32, 1 + (m as u32), d as u32) {
                     Some(nd) => i.ret(nd),
@@ -658,6 +674,11 @@ pub fn date<I: U8Input>(i: I) -> SimpleResult<I, NaiveDate> {
 
 #[test]
 fn test_date() {
+    let i = b"21 Sept 16";
+    let msg = parse_only(date, i);
+    assert!(msg.is_ok());
+    assert_eq!(msg.unwrap(), NaiveDate::from_ymd(2016, 9, 21));
+
     let i = b"21 Nov 97";
     let msg = parse_only(date, i);
     assert!(msg.is_ok());
@@ -699,9 +720,10 @@ pub fn month<I: U8Input>(i: I) -> SimpleResult<I, Month> {
     |i| or(i, |i| string(i, b"Jul").then(|i| i.ret(Month::Jul)),
     |i| or(i, |i| string(i, b"Aug").then(|i| i.ret(Month::Aug)),
     |i| or(i, |i| string(i, b"Sep").then(|i| i.ret(Month::Sep)),
+    |i| or(i, |i| string(i, b"Sept").then(|i| i.ret(Month::Sep)),
     |i| or(i, |i| string(i, b"Oct").then(|i| i.ret(Month::Oct)),
     |i| or(i, |i| string(i, b"Nov").then(|i| i.ret(Month::Nov)),
-    |i| string(i, b"Dec").then(|i| i.ret(Month::Dec)))))))))))))
+    |i| string(i, b"Dec").then(|i| i.ret(Month::Dec))))))))))))))
 }
 
 #[test]
@@ -740,6 +762,11 @@ pub fn time<I: U8Input>(i: I) -> SimpleResult<I, (NaiveTime, FixedOffset)> {
 
 #[test]
 fn test_time() {
+    let i = b"19:51 UTC";
+    let msg = parse_only(time, i);
+    assert!(msg.is_ok());
+    assert_eq!(msg.unwrap(), (NaiveTime::from_hms(19,51,0), FixedOffset::west(0)));
+
     let i = b"09:55:06 -0600";
     let msg = parse_only(time, i);
     assert!(msg.is_ok());
@@ -829,15 +856,19 @@ pub fn mailbox<I: U8Input>(i: I) -> SimpleResult<I, Address> {
     or(i,
        |i| name_addr(i).map(|(local_part, domain, maybe_display_name)| {
            Address::Mailbox{
-               local_part: unsafe { String::from_utf8_unchecked(local_part.buf().bytes().to_vec()) },
-               domain: unsafe { String::from_utf8_unchecked(domain.buf().bytes().to_vec()) },
+               // local_part: unsafe { String::from_utf8_unchecked(local_part.buf().bytes().to_vec()) },
+               // domain: unsafe { String::from_utf8_unchecked(domain.buf().bytes().to_vec()) },
+               local_part: String::from_utf8(local_part.buf().bytes().to_vec()).unwrap(),
+               domain: String::from_utf8(domain.buf().bytes().to_vec()).unwrap(),
                display_name: maybe_display_name,
            }
        }),
        |i| addr_spec(i).map(|(local_part, domain)| {
            Address::Mailbox{
-               local_part: unsafe { String::from_utf8_unchecked(local_part.buf().bytes().to_vec()) },
-               domain: unsafe { String::from_utf8_unchecked(domain.buf().bytes().to_vec()) },
+               // local_part: unsafe { String::from_utf8_unchecked(local_part.buf().bytes().to_vec()) },
+               // domain: unsafe { String::from_utf8_unchecked(domain.buf().bytes().to_vec()) },
+               local_part: String::from_utf8(local_part.buf().bytes().to_vec()).unwrap(),
+               domain: String::from_utf8(domain.buf().bytes().to_vec()).unwrap(),
                display_name: None,
            }
        }))
@@ -1950,11 +1981,12 @@ pub fn obs_second<I: U8Input>(i: I) -> SimpleResult<I, usize> {
 //    PDT is semantically equivalent to -0700
 //    PST is semantically equivalent to -0800
 //    
-// NOTE: Modifying to allow preceeding FWS
+// NOTE: Modifying to allow preceeding FWS, adding 'UTC'
 pub fn obs_zone<I: U8Input>(i: I) -> SimpleResult<I, FixedOffset> {
     fws(i).then(|i| {
         or(i, |i| string(i, b"UT").then(|i| i.ret(0)),
         |i| or(i, |i| string(i, b"GMT").then(|i| i.ret(0)),
+        |i| or(i, |i| string(i, b"UTC").then(|i| i.ret(0)),
         |i| or(i, |i| string(i, b"EST").then(|i| i.ret(-5)),
         |i| or(i, |i| string(i, b"EDT").then(|i| i.ret(-4)),
         |i| or(i, |i| string(i, b"CST").then(|i| i.ret(-6)),
@@ -1968,7 +2000,7 @@ pub fn obs_zone<I: U8Input>(i: I) -> SimpleResult<I, FixedOffset> {
         |i| or(i, |i| satisfy(i, |i| 97 <= i && i <= 105).then(|i| i.ret(0)),
         |i| or(i, |i| satisfy(i, |i| 107 <= i && i <= 122).then(|i| i.ret(0)),
         |i| skip_many1(i, alpha).then(|i| i.ret(0)),
-        )))))))))))))).map(|o| FixedOffset::west(o))
+        ))))))))))))))).map(|o| FixedOffset::west(o))
     })
 }
 
@@ -2623,7 +2655,8 @@ pub fn obs_optional<I: U8Input>(i: I) -> SimpleResult<I, Field> {
             token(i, b':').then(|i| {
                 unstructured_crlf(i).bind(|i, v| {
                     // NOTE: `field-name` is "printable US-ASCII characters not including ':'"
-                    let name = unsafe { String::from_utf8_unchecked(n.into_vec()) };
+                    // let name = unsafe { String::from_utf8_unchecked(n.into_vec()) };
+                    let name = String::from_utf8(n.into_vec()).unwrap();
                     let value = UnstructuredField {data: v};
                     debug!("parsed obs-optional {}", name);
 
@@ -2633,3 +2666,22 @@ pub fn obs_optional<I: U8Input>(i: I) -> SimpleResult<I, Field> {
         })
     })
 }
+
+/*
+mod bench {
+    extern crate test;
+
+    use self::test::Bencher;
+    use chomp::*;
+    use super::*;
+
+    #[bench]
+    fn bench_text(b: &mut Bencher) {
+        let raw: Vec<u8> = (0..10000).map(|i| (i % 128) as u8).collect();
+        let input = test::black_box(&raw[..]);
+
+        b.iter(|| {
+        })
+    }
+}
+*/
