@@ -1309,6 +1309,10 @@ pub fn message<I: U8Input>(i: I) -> SimpleResult<I, Message> {
     })
 }
 
+pub fn message_optional<I: U8Input>(i: I) -> SimpleResult<I, ()> {
+    many(i, obs_optional).map(|_: Vec<Field>| ())
+}
+
 pub fn message_eof<I: U8Input>(i: I) -> SimpleResult<I, Message> {
     message(i).bind(|i, m| {
         eof(i).then(|i| {
@@ -2662,6 +2666,25 @@ pub fn obs_optional<I: U8Input>(i: I) -> SimpleResult<I, Field> {
 
                     i.ret(Field::Optional(name, value))
                 })
+            })
+        })
+    })
+}
+
+pub fn raw_headers<I: U8Input + Debug>(i: I) -> SimpleResult<I, Vec<I::Buffer>> {
+    many1(i, |i| {
+        // many1(scan) cycles on empty input for some reason...
+        peek_next(i).then(|i| {
+            scan(i, (false, false), |s, t| {
+                match (s, t) {
+                    // Following CRLF
+                    ((true, true), _) => None,
+                    // LF Following CR
+                    ((false, true), 10) => Some((true, true)),
+                    // CR
+                    (_, 13) => Some((false, true)),
+                    _ => Some((false, false)),
+                }
             })
         })
     })

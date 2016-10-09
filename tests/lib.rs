@@ -8,11 +8,15 @@ use bytes::Bytes;
 use chrono::offset::fixed::FixedOffset;
 use chrono::offset::TimeZone;
 use mail::*;
-use mail::rfc5322::message;
+use mail::rfc5322::*;
 
 #[test]
 fn example_1_1_1() {
     let raw = include_bytes!("example_1_1.1.eml");
+
+    let msg = parse_only(raw_headers, raw);
+    assert!(msg.is_ok());
+
     let msg = parse_only(message, raw);
     println!("{:?}", msg);
 
