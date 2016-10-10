@@ -2671,20 +2671,28 @@ pub fn obs_optional<I: U8Input>(i: I) -> SimpleResult<I, Field> {
     })
 }
 
-pub fn raw_headers<I: U8Input + Debug>(i: I) -> SimpleResult<I, Vec<I::Buffer>> {
+fn is_field_delim(t: u8) -> bool {
+    t == b':' || t == b' ' || t == 9 // 9 = HTAB
+}
+
+pub fn raw_headers<I: U8Input + Debug>(i: I) -> SimpleResult<I, Vec<(I::Buffer, I::Buffer)>> {
     many1(i, |i| {
-        // many1(scan) cycles on empty input for some reason...
-        peek_next(i).then(|i| {
-            scan(i, (false, false), |s, t| {
-                match (s, t) {
-                    // Following CRLF
-                    ((true, true), _) => None,
-                    // LF Following CR
-                    ((false, true), 10) => Some((true, true)),
-                    // CR
-                    (_, 13) => Some((false, true)),
-                    _ => Some((false, false)),
-                }
+        take_while1(i, |t| !is_field_delim(t)).bind(|mut i, n| {
+            skip_while(i, is_field_delim).then(|i| {
+                // many1(scan) cycles on empty input for some reason...
+                scan(i, (false, false), |s, t| {
+                    match (s, t) {
+                        // Following CRLF
+                        ((true, true), _) => None,
+                        // LF Following CR
+                        ((false, true), 10) => Some((true, true)),
+                        // CR
+                        (_, 13) => Some((false, true)),
+                        _ => Some((false, false)),
+                    }
+                }).bind(|i, v| {
+                    i.ret((n, v))
+                })
             })
         })
     })
