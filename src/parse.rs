@@ -11,6 +11,7 @@ use std::collections::HashSet;
 
 use bytes::str::ByteStr;
 use chomp::buffer::{Source, Stream, StreamError};
+use chomp::types::*;
 
 use mail::*;
 use mail::rfc5322::*;
@@ -49,19 +50,17 @@ pub fn main() {
     }
 }
 
-fn output_message(m: Message, parsed_field_names: &HashSet<String>) {
+fn output_message<I: U8Input>(m: Message<I>, parsed_field_names: &HashSet<String>) {
     for field in m.fields.iter() {
         match field {
             &Field::Optional(ref n, ref f) => {
-                let buf = f.data.buf();
-                let s = String::from_utf8_lossy(buf.bytes());
                 if parsed_field_names.contains(&n.to_lowercase()) {
-                    error!("failed to parse {}: {:?}", n, s);
+                    error!("failed to parse {}: {}", n, f.data());
                 } else {
-                    debug!("(unstructured) {}: {:?}", n, s);
+                    debug!("(unstructured) {}: {}", n, f.data());
                 }
             },
-            _ => debug!("{:?}", field),
+            _ => {}, //debug!("{:?}", field),
         }
     }
     debug!("Body bytes: {}", m.body.map_or(0, |b| b.len()));

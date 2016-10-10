@@ -12,17 +12,21 @@ extern crate log;
 pub mod rfc5322;
 mod util;
 
+use std::fmt;
+use std::borrow;
+
 use chrono::datetime::DateTime;
 use chrono::offset::fixed::FixedOffset;
 use bytes::Bytes;
+use chomp::types::*;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(PartialEq)]
 pub enum Day { Mon, Tue, Wed, Thu, Fri, Sat, Sun }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub enum Month { Jan, Feb, Mar, Apr, May, Jun, Jul, Aug, Sep, Oct, Nov, Dec }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub enum Address {
     Mailbox {
         local_part: String,
@@ -35,20 +39,20 @@ pub enum Address {
     },
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct MessageID {
     pub id_left: Bytes,
     pub id_right: Bytes,
 }
 
-#[derive(Clone, Debug, PartialEq)]
-pub struct Message {
+#[derive(Debug, PartialEq)]
+pub struct Message<I: U8Input> {
     // pub traces: Vec<Trace>,
-    pub fields: Vec<Field>,
+    pub fields: Vec<Field<I>>,
     pub body: Option<Bytes>,
 }
 
-impl Message {
+impl<I: U8Input> Message<I> {
     pub fn from<'a>(&'a self) -> Option<&'a AddressesField> {
         self.fields.iter().filter_map(|i| {
             match i {
@@ -139,7 +143,7 @@ impl Message {
         }).next()
     }
 
-    pub fn subject<'a>(&'a self) -> Option<&'a UnstructuredField> {
+    pub fn subject<'a>(&'a self) -> Option<&'a UnstructuredField<I>> {
         self.fields.iter().filter_map(|i| {
             match i {
                 &Field::Subject(ref f) => Some(f),
@@ -148,7 +152,7 @@ impl Message {
         }).next()
     }
 
-    pub fn comments<'a>(&'a self) -> Vec<&'a UnstructuredField> {
+    pub fn comments<'a>(&'a self) -> Vec<&'a UnstructuredField<I>> {
         self.fields.iter().filter_map(|i| {
             match i {
                 &Field::Comments(ref f) => Some(f),
@@ -166,7 +170,7 @@ impl Message {
         }).collect()
     }
 
-    pub fn optional<'a>(&'a self) -> Vec<(&'a str, &'a UnstructuredField)> {
+    pub fn optional<'a>(&'a self) -> Vec<(&'a str, &'a UnstructuredField<I>)> {
         self.fields.iter().filter_map(|i| {
             match i {
                 &Field::Optional(ref k, ref v) => Some((k.as_str(), v)),
@@ -176,14 +180,14 @@ impl Message {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
-pub struct Trace {
+#[derive(Debug, PartialEq)]
+pub struct Trace<I: U8Input> {
     pub return_path: Option<Address>,
-    pub fields: Vec<Field>,
+    pub fields: Vec<Field<I>>,
 }
 
-#[derive(Clone, Debug, PartialEq)]
-pub enum Field {
+#[derive(Debug, PartialEq)]
+pub enum Field<I: U8Input> {
     Date(DateTimeField),
     From(AddressesField),
     Sender(AddressField),
@@ -194,8 +198,8 @@ pub enum Field {
     MessageID(MessageIDField),
     InReplyTo(MessageIDsField),
     References(MessageIDsField),
-    Subject(UnstructuredField),
-    Comments(UnstructuredField),
+    Subject(UnstructuredField<I>),
+    Comments(UnstructuredField<I>),
     Keywords(KeywordsField),
     ReturnPath(AddressField),
     Received(ReceivedField),
@@ -207,51 +211,65 @@ pub enum Field {
     ResentBcc(AddressesField),
     ResentReplyTo(AddressesField),
     ResentMessageID(MessageIDField),
-    Optional(String, UnstructuredField),
+    Optional(String, UnstructuredField<I>),
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct ReceivedField {
     pub date_time: DateTime<FixedOffset>,
     pub tokens: Vec<Bytes>,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct DateTimeField {
     pub date_time: DateTime<FixedOffset>,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct AddressesField {
     pub addresses: Vec<Address>,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct AddressField {
     pub address: Address,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct MessageIDField {
     pub message_id: MessageID,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct MessageIDsField {
     pub message_ids: Vec<MessageID>,
 }
 
-#[derive(Clone, Debug, PartialEq)]
-pub struct UnstructuredField {
-    pub data: Bytes,
+#[derive(PartialEq)]
+pub struct UnstructuredField<I: U8Input> {
+    data: I::Buffer,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+impl<I: U8Input> UnstructuredField<I> {
+    pub fn data<'a>(&self) -> String {
+        let s = &self.data.to_vec()[..];
+        let cow = String::from_utf8_lossy(s);
+        cow.into_owned().to_string()
+    }
+}
+
+impl<I: U8Input> fmt::Debug for UnstructuredField<I> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        write!(f, "{}", self.data())
+    }
+}
+
+#[derive(Debug, PartialEq)]
 pub struct KeywordsField {
     pub keywords: Vec<Bytes>,
 }
 
-impl Field {
+impl<I: U8Input> Field<I> {
     /// Returns true if this is an "unstructured" field
     pub fn is_unstructured(&self) -> bool {
         match self {
