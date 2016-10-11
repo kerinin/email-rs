@@ -18,7 +18,12 @@ use std::borrow;
 use chrono::datetime::DateTime;
 use chrono::offset::fixed::FixedOffset;
 use bytes::Bytes;
+use chomp::*;
 use chomp::types::*;
+use chomp::parsers::*;
+use chomp::combinators::*;
+
+use rfc5322::*;
 
 #[derive(PartialEq)]
 pub enum Day { Mon, Tue, Wed, Thu, Fri, Sat, Sun }
@@ -53,7 +58,7 @@ pub struct Message<I: U8Input> {
 }
 
 impl<I: U8Input> Message<I> {
-    pub fn from<'a>(&'a self) -> Option<&'a AddressesField> {
+    pub fn from<'a>(&'a self) -> Option<&'a AddressesField<I>> {
         self.fields.iter().filter_map(|i| {
             match i {
                 &Field::From(ref f) => Some(f),
@@ -62,7 +67,7 @@ impl<I: U8Input> Message<I> {
         }).next()
     }
 
-    pub fn date<'a>(&'a self) -> Option<&'a DateTimeField> {
+    pub fn date<'a>(&'a self) -> Option<&'a DateTimeField<I>> {
         self.fields.iter().filter_map(|i| {
             match i {
                 &Field::Date(ref f) => Some(f),
@@ -71,7 +76,7 @@ impl<I: U8Input> Message<I> {
         }).next()
     }
 
-    pub fn sender<'a>(&'a self) -> Option<&'a AddressField> {
+    pub fn sender<'a>(&'a self) -> Option<&'a AddressField<I>> {
         self.fields.iter().filter_map(|i| {
             match i {
                 &Field::Sender(ref f) => Some(f),
@@ -80,7 +85,7 @@ impl<I: U8Input> Message<I> {
         }).next()
     }
 
-    pub fn reply_to<'a>(&'a self) -> Option<&'a AddressesField> {
+    pub fn reply_to<'a>(&'a self) -> Option<&'a AddressesField<I>> {
         self.fields.iter().filter_map(|i| {
             match i {
                 &Field::ReplyTo(ref f) => Some(f),
@@ -89,7 +94,7 @@ impl<I: U8Input> Message<I> {
         }).next()
     }
 
-    pub fn to<'a>(&'a self) -> Option<&'a AddressesField> {
+    pub fn to<'a>(&'a self) -> Option<&'a AddressesField<I>> {
         self.fields.iter().filter_map(|i| {
             match i {
                 &Field::To(ref f) => Some(f),
@@ -98,7 +103,7 @@ impl<I: U8Input> Message<I> {
         }).next()
     }
 
-    pub fn cc<'a>(&'a self) -> Option<&'a AddressesField> {
+    pub fn cc<'a>(&'a self) -> Option<&'a AddressesField<I>> {
         self.fields.iter().filter_map(|i| {
             match i {
                 &Field::Cc(ref f) => Some(f),
@@ -107,7 +112,7 @@ impl<I: U8Input> Message<I> {
         }).next()
     }
 
-    pub fn bcc<'a>(&'a self) -> Option<&'a AddressesField> {
+    pub fn bcc<'a>(&'a self) -> Option<&'a AddressesField<I>> {
         self.fields.iter().filter_map(|i| {
             match i {
                 &Field::Bcc(ref f) => Some(f),
@@ -116,7 +121,7 @@ impl<I: U8Input> Message<I> {
         }).next()
     }
 
-    pub fn message_id<'a>(&'a self) -> Option<&'a MessageIDField> {
+    pub fn message_id<'a>(&'a self) -> Option<&'a MessageIDField<I>> {
         self.fields.iter().filter_map(|i| {
             match i {
                 &Field::MessageID(ref f) => Some(f),
@@ -125,7 +130,7 @@ impl<I: U8Input> Message<I> {
         }).next()
     }
 
-    pub fn references<'a>(&'a self) -> Option<&'a MessageIDsField> {
+    pub fn references<'a>(&'a self) -> Option<&'a MessageIDsField<I>> {
         self.fields.iter().filter_map(|i| {
             match i {
                 &Field::References(ref f) => Some(f),
@@ -134,7 +139,7 @@ impl<I: U8Input> Message<I> {
         }).next()
     }
 
-    pub fn in_reply_to<'a>(&'a self) -> Option<&'a MessageIDsField> {
+    pub fn in_reply_to<'a>(&'a self) -> Option<&'a MessageIDsField<I>> {
         self.fields.iter().filter_map(|i| {
             match i {
                 &Field::InReplyTo(ref f) => Some(f),
@@ -161,7 +166,7 @@ impl<I: U8Input> Message<I> {
         }).collect()
     }
 
-    pub fn keywords<'a>(&'a self) -> Vec<&'a KeywordsField> {
+    pub fn keywords<'a>(&'a self) -> Vec<&'a KeywordsField<I>> {
         self.fields.iter().filter_map(|i| {
             match i {
                 &Field::Keywords(ref f) => Some(f),
@@ -170,10 +175,10 @@ impl<I: U8Input> Message<I> {
         }).collect()
     }
 
-    pub fn optional<'a>(&'a self) -> Vec<(&'a str, &'a UnstructuredField<I>)> {
+    pub fn optional<'a>(&'a self) -> Vec<(&'a String, &'a UnstructuredField<I>)> {
         self.fields.iter().filter_map(|i| {
             match i {
-                &Field::Optional(ref k, ref v) => Some((k.as_str(), v)),
+                &Field::Optional(ref k, ref v) => Some((k, v)),
                 _ => None,
             }
         }).collect()
@@ -188,61 +193,194 @@ pub struct Trace<I: U8Input> {
 
 #[derive(Debug, PartialEq)]
 pub enum Field<I: U8Input> {
-    Date(DateTimeField),
-    From(AddressesField),
-    Sender(AddressField),
-    ReplyTo(AddressesField),
-    To(AddressesField),
-    Cc(AddressesField),
-    Bcc(AddressesField),
-    MessageID(MessageIDField),
-    InReplyTo(MessageIDsField),
-    References(MessageIDsField),
+    Date(DateTimeField<I>),
+    From(AddressesField<I>),
+    Sender(AddressField<I>),
+    ReplyTo(AddressesField<I>),
+    To(AddressesField<I>),
+    Cc(AddressesField<I>),
+    Bcc(AddressesField<I>),
+    MessageID(MessageIDField<I>),
+    InReplyTo(MessageIDsField<I>),
+    References(MessageIDsField<I>),
     Subject(UnstructuredField<I>),
     Comments(UnstructuredField<I>),
-    Keywords(KeywordsField),
-    ReturnPath(AddressField),
-    Received(ReceivedField),
-    ResentDate(DateTimeField),
-    ResentFrom(AddressesField),
-    ResentSender(AddressField),
-    ResentTo(AddressesField),
-    ResentCc(AddressesField),
-    ResentBcc(AddressesField),
-    ResentReplyTo(AddressesField),
-    ResentMessageID(MessageIDField),
+    Keywords(KeywordsField<I>),
+    ReturnPath(AddressField<I>),
+    Received(ReceivedField<I>),
+    ResentDate(DateTimeField<I>),
+    ResentFrom(AddressesField<I>),
+    ResentSender(AddressField<I>),
+    ResentTo(AddressesField<I>),
+    ResentCc(AddressesField<I>),
+    ResentBcc(AddressesField<I>),
+    ResentReplyTo(AddressesField<I>),
+    ResentMessageID(MessageIDField<I>),
     Optional(String, UnstructuredField<I>),
 }
 
-#[derive(Debug, PartialEq)]
-pub struct ReceivedField {
-    pub date_time: DateTime<FixedOffset>,
-    pub tokens: Vec<Bytes>,
+#[derive(PartialEq)]
+pub struct ReceivedField<I: U8Input> {
+    data: I::Buffer,
 }
 
-#[derive(Debug, PartialEq)]
-pub struct DateTimeField {
-    pub date_time: DateTime<FixedOffset>,
+impl<I: U8Input> ReceivedField<I> {
+    // *received-token ";" date-time
+    pub fn tokens(&self) -> Option<(Vec<Bytes>, DateTime<FixedOffset>)> {
+        let parser = |i| {
+            many(i, received_token).bind(|i, tokens: Vec<Bytes>| {
+                token(i, b';').then(|i| {
+                    date_time(i).map(|dt: DateTime<FixedOffset>| (tokens, dt))
+                })
+            })
+        };
+        parse_only(parser, &self.data.to_vec()[..]).ok()
+    }
+
+    pub fn to_string(&self) -> String {
+        let s = &self.data.to_vec()[..self.data.len()-2];
+        let cow = String::from_utf8_lossy(s);
+        cow.into_owned().to_string()
+    }
 }
 
-#[derive(Debug, PartialEq)]
-pub struct AddressesField {
-    pub addresses: Vec<Address>,
+impl<I: U8Input> fmt::Debug for ReceivedField<I> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        write!(f, "{}", self.to_string())
+    }
 }
 
-#[derive(Debug, PartialEq)]
-pub struct AddressField {
-    pub address: Address,
+#[derive(PartialEq)]
+pub struct DateTimeField<I: U8Input> {
+    data: I::Buffer,
 }
 
-#[derive(Debug, PartialEq)]
-pub struct MessageIDField {
-    pub message_id: MessageID,
+impl<I: U8Input> DateTimeField<I> {
+    // date-time
+    pub fn date_time(&self) -> Option<DateTime<FixedOffset>> {
+        parse_only(date_time, &self.data.to_vec()[..]).ok()
+    }
+
+    pub fn to_string(&self) -> String {
+        let s = &self.data.to_vec()[..self.data.len()-2];
+        let cow = String::from_utf8_lossy(s);
+        cow.into_owned().to_string()
+    }
 }
 
-#[derive(Debug, PartialEq)]
-pub struct MessageIDsField {
-    pub message_ids: Vec<MessageID>,
+impl<I: U8Input> fmt::Debug for DateTimeField<I> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        write!(f, "{}", self.to_string())
+    }
+}
+
+#[derive(PartialEq)]
+pub struct AddressesField<I: U8Input> {
+    data: I::Buffer,
+}
+
+impl<I: U8Input> AddressesField<I> {
+    // address-list
+    pub fn addresses(&self) -> Vec<Address> {
+        parse_only(address_list, &self.data.to_vec()[..]).unwrap_or(vec!())
+    }
+
+    pub fn to_string(&self) -> String {
+        let s = &self.data.to_vec()[..self.data.len()-2];
+        let cow = String::from_utf8_lossy(s);
+        cow.into_owned().to_string()
+    }
+}
+
+impl<I: U8Input> fmt::Debug for AddressesField<I> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        write!(f, "{}", self.to_string())
+    }
+}
+
+#[derive(PartialEq)]
+pub struct AddressField<I: U8Input> {
+    data: I::Buffer,
+}
+
+impl<I: U8Input> AddressField<I> {
+
+    // mailbox
+    pub fn address(&self) -> Option<Address> {
+        parse_only(mailbox, &self.data.to_vec()[..]).ok()
+    }
+
+    pub fn to_string(&self) -> String {
+        let s = &self.data.to_vec()[..self.data.len()-2];
+        let cow = String::from_utf8_lossy(s);
+        cow.into_owned().to_string()
+    }
+}
+
+impl<I: U8Input> fmt::Debug for AddressField<I> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        write!(f, "{}", self.to_string())
+    }
+}
+
+#[derive(PartialEq)]
+pub struct MessageIDField<I: U8Input> {
+    data: I::Buffer,
+}
+
+impl<I: U8Input> MessageIDField<I> {
+    pub fn message_id(&self) -> Option<MessageID> {
+        parse_only(msg_id, &self.data.to_vec()[..]).ok()
+    }
+
+    pub fn to_string(&self) -> String {
+        let s = &self.data.to_vec()[..self.data.len()-2];
+        let cow = String::from_utf8_lossy(s);
+        cow.into_owned().to_string()
+    }
+}
+
+impl<I: U8Input> fmt::Debug for MessageIDField<I> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        write!(f, "{}", self.to_string())
+    }
+}
+
+#[derive(PartialEq)]
+pub struct MessageIDsField<I: U8Input> {
+    data: I::Buffer,
+}
+
+impl<I: U8Input> MessageIDsField<I> {
+    //  *(phrase / msg-id)
+    //  For purposes of interpretation, the phrases in the "In-Reply-To:" and
+    //  "References:" fields are ignored.
+    pub fn message_ids(&self) -> Vec<MessageID> {
+        parse_only(|i| {
+            many(i, |i| {
+                or(i, 
+                   |i| phrase(i).map(|_| None),
+                   |i| msg_id(i).map(|v| Some(v)))
+            }).map(|vs: Vec<Option<MessageID>>| {
+                vs.into_iter()
+                    .filter(|v| v.is_some())
+                    .map(|v| v.unwrap())
+                    .collect::<Vec<MessageID>>()
+            })
+        }, &self.data.to_vec()[..]).unwrap_or(vec!())
+    }
+
+    pub fn to_string(&self) -> String {
+        let s = &self.data.to_vec()[..self.data.len()-2];
+        let cow = String::from_utf8_lossy(s);
+        cow.into_owned().to_string()
+    }
+}
+
+impl<I: U8Input> fmt::Debug for MessageIDsField<I> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        write!(f, "{}", self.to_string())
+    }
 }
 
 #[derive(PartialEq)]
@@ -251,8 +389,8 @@ pub struct UnstructuredField<I: U8Input> {
 }
 
 impl<I: U8Input> UnstructuredField<I> {
-    pub fn data<'a>(&self) -> String {
-        let s = &self.data.to_vec()[..];
+    pub fn to_string(&self) -> String {
+        let s = &self.data.to_vec()[..self.data.len()-2];
         let cow = String::from_utf8_lossy(s);
         cow.into_owned().to_string()
     }
@@ -260,13 +398,31 @@ impl<I: U8Input> UnstructuredField<I> {
 
 impl<I: U8Input> fmt::Debug for UnstructuredField<I> {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        write!(f, "{}", self.data())
+        write!(f, "{}", self.to_string())
     }
 }
 
-#[derive(Debug, PartialEq)]
-pub struct KeywordsField {
-    pub keywords: Vec<Bytes>,
+#[derive(PartialEq)]
+pub struct KeywordsField<I: U8Input> {
+    data: I::Buffer,
+}
+
+impl<I: U8Input> KeywordsField<I> {
+    pub fn keywords(&self) -> Vec<Bytes> {
+        vec!()
+    }
+
+    pub fn to_string(&self) -> String {
+        let s = &self.data.to_vec()[..self.data.len()-2];
+        let cow = String::from_utf8_lossy(s);
+        cow.into_owned().to_string()
+    }
+}
+
+impl<I: U8Input> fmt::Debug for KeywordsField<I> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        write!(f, "{}", self.to_string())
+    }
 }
 
 impl<I: U8Input> Field<I> {

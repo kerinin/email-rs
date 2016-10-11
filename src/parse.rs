@@ -17,6 +17,7 @@ use mail::*;
 use mail::rfc5322::*;
 
 pub fn main() {
+    /*
     env_logger::init().unwrap();
 
     let mut parsed_field_names = HashSet::new();
@@ -64,4 +65,5 @@ fn output_message<I: U8Input>(m: Message<I>, parsed_field_names: &HashSet<String
         }
     }
     debug!("Body bytes: {}", m.body.map_or(0, |b| b.len()));
+    */
 }
