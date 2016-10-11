@@ -17,7 +17,6 @@ use mail::*;
 use mail::rfc5322::*;
 
 pub fn main() {
-    /*
     env_logger::init().unwrap();
 
     let mut parsed_field_names = HashSet::new();
@@ -56,14 +55,13 @@ fn output_message<I: U8Input>(m: Message<I>, parsed_field_names: &HashSet<String
         match field {
             &Field::Optional(ref n, ref f) => {
                 if parsed_field_names.contains(&n.to_lowercase()) {
-                    error!("failed to parse {}: {}", n, f.data());
+                    error!("failed to parse {}: {}", n, f.to_string());
                 } else {
-                    debug!("(unstructured) {}: {}", n, f.data());
+                    debug!("(unstructured) {}: {}", n, f.to_string());
                 }
             },
-            _ => {}, //debug!("{:?}", field),
+            _ => debug!("{:?}", field),
         }
     }
-    debug!("Body bytes: {}", m.body.map_or(0, |b| b.len()));
-    */
+    debug!("Body bytes: {}", m.body().len());
 }

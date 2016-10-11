@@ -1,7 +1,5 @@
 //! RFC5322 specifies message bodies (supercedes RFC2822)
 
-use std::fmt::Debug;
-
 use chrono::Datelike;
 use chrono::datetime::DateTime;
 use chrono::offset::LocalResult;
@@ -509,19 +507,6 @@ fn test_quoted_string() {
     let expected = Bytes::from_slice(b" Joe Q. Public ");
     assert_eq!(msg.unwrap(), expected);
 }
-
-/*
-#[test]
-fn test_quoted_string_not() {
-    let i = b"\"jdoe\"";
-    let msg = parse_only(|i| quoted_string_not(i, |c| c == b'@'), i);
-    assert_eq!(msg, Ok(Bytes::from_slice(b"jdoe")));
-
-    let i = b"\"jdoe\"@example.com";
-    let msg = parse_only(|i| quoted_string_not(i, |c| c == b'@'), i);
-    assert_eq!(msg, Ok(Bytes::from_slice(b"jdoe")));
-}
-*/
 
 // word            =   atom / quoted-string
 pub fn word<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
@@ -1292,7 +1277,7 @@ pub fn dtext<I: U8Input>(i: I) -> SimpleResult<I, u8> {
 //                     [CRLF body]
 // TODO: Support new fields
 pub fn message<I: U8Input>(i: I) -> SimpleResult<I, Message<I>> {
-    raw_headers(i).bind(|i, f| {
+    raw_fields(i).bind(|i, f| {
         option(i, |i| {
             crlf(i).then(|i| {
                 body(i).map(|b| Some(b))
@@ -1300,7 +1285,7 @@ pub fn message<I: U8Input>(i: I) -> SimpleResult<I, Message<I>> {
         }, None).bind(|i, b| {
             let message = Message {
                 fields: f,
-                body: b.map(|buf| Bytes::from_slice(&buf.into_vec())),
+                body: b,
             };
             debug!("parsed message");
 
@@ -1308,12 +1293,6 @@ pub fn message<I: U8Input>(i: I) -> SimpleResult<I, Message<I>> {
         })
     })
 }
-
-/*
-pub fn message_optional<I: U8Input>(i: I) -> SimpleResult<I, ()> {
-    many(i, obs_optional).map(|_: Vec<Field<I>>| ())
-}
-*/
 
 pub fn message_eof<I: U8Input>(i: I) -> SimpleResult<I, Message<I>> {
     message(i).bind(|i, m| {
@@ -1420,64 +1399,36 @@ pub fn text<I: U8Input>(i: I) -> SimpleResult<I, u8> {
 // NOTE: Technically we should only parse obsolete fields or new fields, based on
 // message = (fields / obs-fields).  Since I'm lazy and don't feel like 
 // implementing all the new parsers, I'm going to just mix them up in here
-/*
-pub fn fields<I: U8Input>(i: I) -> SimpleResult<I, Vec<Field<I>>> {
-    // NOTE: REALLY wish the parser macro worked right about here
+pub fn raw_fields<I: U8Input>(i: I) -> SimpleResult<I, Vec<Field<I>>> {
     many(i, |i| {
-        or(i,       received,
-        |i| or(i,   obs_orig_date,
-        |i| or(i,   from,
-        |i| or(i,   obs_from,
-        |i| or(i,   obs_sender,
-        |i| or(i,   obs_reply_to,
-        |i| or(i,   obs_to,
-        |i| or(i,   obs_cc,
-        |i| or(i,   obs_message_id,
-        |i| or(i,   obs_in_reply_to,
-        |i| or(i,   obs_references,
-        // |i| or(i,   obs_subject,
-        // |i| or(i,   obs_comments,
-        |i| or(i,   obs_resent_from,
-        |i| or(i,   obs_resent_send,
-        |i| or(i,   obs_resent_date,
-        |i| or(i,   obs_resent_to,
-        |i| or(i,   obs_resent_cc,
-        |i| or(i,   obs_resent_mid,
-               obs_resent_rply
-        // |i| or(i,   obs_resent_rply,
-                    // obs_optional,
-                    )))))))))))))))))//)))
+        or(i,       raw_received,
+        |i| or(i,   raw_obs_orig_date,
+        |i| or(i,   raw_obs_from,
+        |i| or(i,   raw_obs_sender,
+        |i| or(i,   raw_obs_reply_to,
+        |i| or(i,   raw_obs_to,
+        |i| or(i,   raw_obs_cc,
+        |i| or(i,   raw_obs_message_id,
+        |i| or(i,   raw_obs_in_reply_to,
+        |i| or(i,   raw_obs_references,
+        |i| or(i,   raw_obs_subject,
+        |i| or(i,   raw_obs_comments,
+        |i| or(i,   raw_obs_resent_from,
+        |i| or(i,   raw_obs_resent_send,
+        |i| or(i,   raw_obs_resent_date,
+        |i| or(i,   raw_obs_resent_to,
+        |i| or(i,   raw_obs_resent_cc,
+        |i| or(i,   raw_obs_resent_mid,
+        |i| or(i,   raw_obs_resent_rply,
+               raw_obs_optional,
+                    )))))))))))))))))))
     })
 }
-*/
- 
 
 // orig-date       =   "Date:" date-time CRLF
 //
 // from            =   "From:" mailbox-list CRLF
-// NOTE: Accepting case-insensitive header name values
-/*
-pub fn from<I: U8Input>(i: I) -> SimpleResult<I, Field<I>> {
-    downcased_string(i, b"From:").then(|i| {
-        mailbox_list(i).bind(|i, mbs| {
-            crlf(i).then(|i| {
-                let value = AddressesField {addresses: mbs};
-                debug!("parsed from");
-
-                i.ret(Field::From(value))
-            })
-        })
-    })
-}
-
-#[test]
-fn test_from() {
-    let i = b"From: =?utf-8?Q?Humble=20Bundle?= <contact@humblebundle.com>\x0d\x0a";
-    let msg = parse_only(obs_from, i);
-    assert!(msg.is_ok());
-}
-*/
-
+//
 // sender          =   "Sender:" mailbox CRLF
 //
 // reply-to        =   "Reply-To:" address-list CRLF
@@ -2257,6 +2208,10 @@ pub fn raw_obs_from<I: U8Input>(i: I) -> SimpleResult<I, Field<I>> {
 
 #[test]
 fn test_raw_obs_from() {
+    let i = b"From: =?utf-8?Q?Humble=20Bundle?= <contact@humblebundle.com>\x0d\x0a";
+    let msg = parse_only(raw_obs_from, i);
+    assert!(msg.is_ok());
+
     let i = b"From: John Doe <jdoe@machine.example>\x0d\x0a";
     let msg = parse_only(raw_obs_from, i);
     assert!(msg.is_ok());
@@ -2264,14 +2219,18 @@ fn test_raw_obs_from() {
     let i = b"From: \"Joe Q. Public\" <john.q.public@example.com>\x0d\x0a";
     let msg = parse_only(raw_obs_from, i);
     assert!(msg.is_ok());
-    // assert_eq!(
-    //     msg.unwrap().addresses().unwrap(), 
-    //     vec!(Address::Mailbox{
-    //         local_part: "john.q.public".to_string(),
-    //         domain: "example.com".to_string(),
-    //         display_name: Some(Bytes::from_slice(b" Joe Q. Public ")),
-    //     }),
-    //     );
+    match msg.unwrap() {
+        Field::From(f) => {
+            let act = f.addresses();
+            let exp = vec!(Address::Mailbox{
+                local_part: "john.q.public".to_string(),
+                domain: "example.com".to_string(),
+                display_name: Some(Bytes::from_slice(b" Joe Q. Public ")),
+            });
+            assert_eq!(act, exp);
+        },
+        _ => assert!(false),
+    }
 }
 
 // obs-sender      =   "Sender" *WSP ":" mailbox CRLF
@@ -2440,140 +2399,101 @@ pub fn raw_obs_comments<I: U8Input>(i: I) -> SimpleResult<I, Field<I>> {
 }
 
 // obs-keywords    =   "Keywords" *WSP ":" obs-phrase-list CRLF
-//
+
 // obs-resent-from =   "Resent-From" *WSP ":" mailbox-list CRLF
 // NOTE: Accepting case-insensitive header name values
-/*
-pub fn obs_resent_from<I: U8Input>(i: I) -> SimpleResult<I, Field<I>> {
-    downcased_string(i, b"Resent-From").then(|i| {
-        option(i, wsp, 0).then(|i| {
-            token(i, b':').then(|i| {
-                mailbox_list(i).bind(|i, mbs| {
-                    crlf(i).then(|i| {
-                        let value = AddressesField {addresses: mbs};
-                        debug!("parsed obs-resent-from");
+pub fn raw_obs_resent_from<I: U8Input>(i: I) -> SimpleResult<I, Field<I>> {
+    drop_field_name(i, b"Resent-From").then(|i| {
+        till_crlf(i).bind(|i, v| {
+            let value = AddressesField {data: v};
 
-                        i.ret(Field::ResentCc(value))
-                    })
-                })
-            })
+            i.ret(Field::ResentFrom(value))
         })
     })
 }
 
 // obs-resent-send =   "Resent-Sender" *WSP ":" mailbox CRLF
 // NOTE: Accepting case-insensitive header name values
-pub fn obs_resent_send<I: U8Input>(i: I) -> SimpleResult<I, Field<I>> {
-    downcased_string(i, b"Resent-Sender").then(|i| {
-        option(i, wsp, 0).then(|i| {
-            token(i, b':').then(|i| {
-                mailbox(i).bind(|i, mb| {
-                    crlf(i).then(|i| {
-                        let value = AddressField {address: mb};
-                        debug!("parsed obs-resent-send");
+pub fn raw_obs_resent_send<I: U8Input>(i: I) -> SimpleResult<I, Field<I>> {
+    drop_field_name(i, b"Resent-Sender").then(|i| {
+        till_crlf(i).bind(|i, v| {
+            let value = AddressField {data: v};
 
-                        i.ret(Field::ResentSender(value))
-                    })
-                })
-            })
+            i.ret(Field::ResentSender(value))
         })
     })
 }
 
 // obs-resent-date =   "Resent-Date" *WSP ":" date-time CRLF
 // NOTE: Accepting case-insensitive header name values
-pub fn obs_resent_date<I: U8Input>(i: I) -> SimpleResult<I, Field<I>> {
-    downcased_string(i, b"Resent-Date").then(|i| {
-        option(i, wsp, 0).then(|i| {
-            token(i, b':').then(|i| {
-                date_time(i).bind(|i, dt| {
-                    crlf(i).then(|i| {
-                        let value = DateTimeField {date_time: dt};
-                        debug!("parsed obs-resent-date");
+pub fn raw_obs_resent_date<I: U8Input>(i: I) -> SimpleResult<I, Field<I>> {
+    drop_field_name(i, b"Resent-Date").then(|i| {
+        till_crlf(i).bind(|i, v| {
+            let value = DateTimeField {data: v};
 
-                        i.ret(Field::ResentDate(value))
-                    })
-                })
-            })
+            i.ret(Field::ResentDate(value))
         })
     })
 }
-//
+
 // obs-resent-to   =   "Resent-To" *WSP ":" address-list CRLF
 // NOTE: Accepting case-insensitive header name values
-pub fn obs_resent_to<I: U8Input>(i: I) -> SimpleResult<I, Field<I>> {
-    downcased_string(i, b"Resent-To").then(|i| {
-        option(i, wsp, 0).then(|i| {
-            token(i, b':').then(|i| {
-                address_list(i).bind(|i, mbs| {
-                    crlf(i).then(|i| {
-                        let value = AddressesField {addresses: mbs};
-                        debug!("parsed obs-resent-to");
+pub fn raw_obs_resent_to<I: U8Input>(i: I) -> SimpleResult<I, Field<I>> {
+    drop_field_name(i, b"Resent-To").then(|i| {
+        till_crlf(i).bind(|i, v| {
+            let value = AddressesField {data: v};
 
-                        i.ret(Field::ResentTo(value))
-                    })
-                })
-            })
+            i.ret(Field::ResentTo(value))
         })
     })
 }
 
 // obs-resent-cc   =   "Resent-Cc" *WSP ":" address-list CRLF
 // NOTE: Accepting case-insensitive header name values
-pub fn obs_resent_cc<I: U8Input>(i: I) -> SimpleResult<I, Field<I>> {
-    downcased_string(i, b"Resent-Cc").then(|i| {
-        option(i, wsp, 0).then(|i| {
-            token(i, b':').then(|i| {
-                address_list(i).bind(|i, mbs| {
-                    crlf(i).then(|i| {
-                        let value = AddressesField {addresses: mbs};
-                        debug!("parsed obs-resent-cc");
+pub fn raw_obs_resent_cc<I: U8Input>(i: I) -> SimpleResult<I, Field<I>> {
+    drop_field_name(i, b"Resent-Cc").then(|i| {
+        till_crlf(i).bind(|i, v| {
+            let value = AddressesField {data: v};
 
-                        i.ret(Field::ResentCc(value))
-                    })
-                })
-            })
+            i.ret(Field::ResentCc(value))
         })
     })
 }
 
 // obs-resent-bcc  =   "Resent-Bcc" *WSP ":"
 //                     (address-list / (*([CFWS] ",") [CFWS])) CRLF
-//
+/*
+pub fn raw_obs_resent_bcc<I: U8Input>(i: I) -> SimpleResult<I, Field<I>> {
+    drop_field_name(i, b"Resent-Bcc").then(|i| {
+        till_crlf(i).bind(|i, v| {
+            let value = AddressesField {data: v};
+
+            i.ret(Field::ResentBcc(value))
+        })
+    })
+}
+*/
+
 // obs-resent-mid  =   "Resent-Message-ID" *WSP ":" msg-id CRLF
 // NOTE: Accepting case-insensitive header name values
-pub fn obs_resent_mid<I: U8Input>(i: I) -> SimpleResult<I, Field<I>> {
-    downcased_string(i, b"Resent-Message-ID").then(|i| {
-        option(i, wsp, 0).then(|i| {
-            token(i, b':').then(|i| {
-                msg_id(i).bind(|i, v| {
-                    crlf(i).then(|i| {
-                        let value = MessageIDField {message_id: v};
-                        debug!("parsed obs-resent-bcc");
+pub fn raw_obs_resent_mid<I: U8Input>(i: I) -> SimpleResult<I, Field<I>> {
+    drop_field_name(i, b"Resent-Message-ID").then(|i| {
+        till_crlf(i).bind(|i, v| {
+            let value = MessageIDField {data: v};
 
-                        i.ret(Field::ResentMessageID(value))
-                    })
-                })
-            })
+            i.ret(Field::ResentMessageID(value))
         })
     })
 }
 
 // obs-resent-rply =   "Resent-Reply-To" *WSP ":" address-list CRLF
 // NOTE: Accepting case-insensitive header name values
-pub fn obs_resent_rply<I: U8Input>(i: I) -> SimpleResult<I, Field<I>> {
-    downcased_string(i, b"Resent-Reply-To").then(|i| {
-        option(i, wsp, 0).then(|i| {
-            token(i, b':').then(|i| {
-                address_list(i).bind(|i, mbs| {
-                    crlf(i).then(|i| {
-                        let value = AddressesField {addresses: mbs};
-                        debug!("parsed obs-resent-rply");
+pub fn raw_obs_resent_rply<I: U8Input>(i: I) -> SimpleResult<I, Field<I>> {
+    drop_field_name(i, b"Resent-Reply-To").then(|i| {
+        till_crlf(i).bind(|i, v| {
+            let value = AddressesField {data: v};
 
-                        i.ret(Field::ResentReplyTo(value))
-                    })
-                })
-            })
+            i.ret(Field::ResentReplyTo(value))
         })
     })
 }
@@ -2583,9 +2503,8 @@ pub fn obs_resent_rply<I: U8Input>(i: I) -> SimpleResult<I, Field<I>> {
 // obs-received    =   "Received" *WSP ":" *received-token CRLF
 //
 // obs-optional    =   field-name *WSP ":" unstructured CRLF
-*/
 pub fn raw_obs_optional<I: U8Input>(i: I) -> SimpleResult<I, Field<I>> {
-    take_while1(i, |t| FTEXT[t as usize]).bind(|mut i, n| {
+    take_while1(i, |t| FTEXT[t as usize]).bind(|i, n| {
         skip_while(i, |t| t == b' ' || t == 9).then(|i| {
             token(i, b':').then(|i| {
                 till_crlf(i).bind(|i, v| {
@@ -2597,36 +2516,6 @@ pub fn raw_obs_optional<I: U8Input>(i: I) -> SimpleResult<I, Field<I>> {
                 })
             })
         })
-    })
-}
-
-fn is_field_delim(t: u8) -> bool {
-    t == b':' || t == b' ' || t == 9 // 9 = HTAB
-}
-
-pub fn raw_headers<I: U8Input>(i: I) -> SimpleResult<I, Vec<Field<I>>> {
-    many(i, |i| {
-        or(i,       raw_received,
-        |i| or(i,   raw_obs_orig_date,
-        |i| or(i,   raw_obs_from,
-        |i| or(i,   raw_obs_sender,
-        |i| or(i,   raw_obs_reply_to,
-        |i| or(i,   raw_obs_to,
-        |i| or(i,   raw_obs_cc,
-        |i| or(i,   raw_obs_message_id,
-        |i| or(i,   raw_obs_in_reply_to,
-        |i| or(i,   raw_obs_references,
-        |i| or(i,   raw_obs_subject,
-        |i| or(i,   raw_obs_comments,
-        // |i| or(i,   obs_resent_from,
-        // |i| or(i,   obs_resent_send,
-        // |i| or(i,   obs_resent_date,
-        // |i| or(i,   obs_resent_to,
-        // |i| or(i,   obs_resent_cc,
-        // |i| or(i,   obs_resent_mid,
-        // |i| or(i,   obs_resent_rply,
-               raw_obs_optional,
-                    ))))))))))))
     })
 }
 

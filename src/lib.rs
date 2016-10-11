@@ -13,7 +13,6 @@ pub mod rfc5322;
 mod util;
 
 use std::fmt;
-use std::borrow;
 
 use chrono::datetime::DateTime;
 use chrono::offset::fixed::FixedOffset;
@@ -54,10 +53,17 @@ pub struct MessageID {
 pub struct Message<I: U8Input> {
     // pub traces: Vec<Trace>,
     pub fields: Vec<Field<I>>,
-    pub body: Option<Bytes>,
+    body: Option<I::Buffer>,
 }
 
 impl<I: U8Input> Message<I> {
+    pub fn body(&self) -> Bytes {
+        match self.body {
+            Some(ref buf) => Bytes::from_slice(&buf.to_vec()),
+            None => Bytes::empty(),
+        }
+    }
+
     pub fn from<'a>(&'a self) -> Option<&'a AddressesField<I>> {
         self.fields.iter().filter_map(|i| {
             match i {
@@ -191,7 +197,7 @@ pub struct Trace<I: U8Input> {
     pub fields: Vec<Field<I>>,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(PartialEq)]
 pub enum Field<I: U8Input> {
     Date(DateTimeField<I>),
     From(AddressesField<I>),
@@ -217,6 +223,37 @@ pub enum Field<I: U8Input> {
     ResentReplyTo(AddressesField<I>),
     ResentMessageID(MessageIDField<I>),
     Optional(String, UnstructuredField<I>),
+}
+
+impl<I: U8Input> fmt::Debug for Field<I> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        match self {
+            &Field::Date(ref v) =>              write!(f, "Date: {}", v.to_string()),
+            &Field::From(ref v) =>              write!(f, "From: {}", v.to_string()),
+            &Field::Sender(ref v) =>            write!(f, "Sender: {}", v.to_string()),
+            &Field::ReplyTo(ref v) =>           write!(f, "Reply-To: {}", v.to_string()),
+            &Field::To(ref v) =>                write!(f, "To: {}", v.to_string()),
+            &Field::Cc(ref v) =>                write!(f, "Cc: {}", v.to_string()),
+            &Field::Bcc(ref v) =>               write!(f, "Bcc: {}", v.to_string()),
+            &Field::MessageID(ref v) =>         write!(f, "Message-ID: {}", v.to_string()),
+            &Field::InReplyTo(ref v) =>         write!(f, "In-Reply-To: {}", v.to_string()),
+            &Field::References(ref v) =>        write!(f, "References: {}", v.to_string()),
+            &Field::Subject(ref v) =>           write!(f, "Subject: {}", v.to_string()),
+            &Field::Comments(ref v) =>          write!(f, "Comments: {}", v.to_string()),
+            &Field::Keywords(ref v) =>          write!(f, "Keywords: {}", v.to_string()),
+            &Field::ReturnPath(ref v) =>        write!(f, "Return-Path: {}", v.to_string()),
+            &Field::Received(ref v) =>          write!(f, "Received: {}", v.to_string()),
+            &Field::ResentDate(ref v) =>        write!(f, "Resent-Date: {}", v.to_string()),
+            &Field::ResentFrom(ref v) =>        write!(f, "Resent-From: {}", v.to_string()),
+            &Field::ResentSender(ref v) =>      write!(f, "Resent-Sender: {}", v.to_string()),
+            &Field::ResentTo(ref v) =>          write!(f, "Resent-To: {}", v.to_string()),
+            &Field::ResentCc(ref v) =>          write!(f, "Resent-Cc: {}", v.to_string()),
+            &Field::ResentBcc(ref v) =>         write!(f, "Resent-Bcc: {}", v.to_string()),
+            &Field::ResentReplyTo(ref v) =>     write!(f, "Resent-Reply-To: {}", v.to_string()),
+            &Field::ResentMessageID(ref v) =>   write!(f, "Resent-Message-ID: {}", v.to_string()),
+            &Field::Optional(ref n, ref v) =>   write!(f, "{}: {}", n, v.to_string()),
+        }
+    }
 }
 
 #[derive(PartialEq)]

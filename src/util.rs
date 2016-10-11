@@ -2,13 +2,12 @@ use std::fmt::Debug;
 use std::str::FromStr;
 
 use chomp::*;
-use bytes::{Bytes, ByteStr};
 
 use chomp::types::*;
 use chomp::parsers::*;
 use chomp::combinators::*;
 use chomp::primitives::Primitives;
-use chomp::primitives::IntoInner;
+// use chomp::primitives::IntoInner;
 // use chomp::combinators::bounded;
 
 fn is_digit(c: u8) -> bool {
@@ -29,6 +28,7 @@ R: bounded::BoundedRange + Debug,
     })
 }
 
+/*
 // Matches all items while ``f`` returns true until ``next`` matches.
 // Considered incomplete if ``f`` returns false without ``next`` matching.  
 // Returns the buffer of matched items and the result of ``next``
@@ -107,6 +107,7 @@ fn test_lazy_take_while() {
     println!("parsed: {:?}", msg);
     assert!(!msg.is_ok());
 }
+*/
 
 // NOTE: This is an identity matrix, except 65-90 (A-Z) are mapped to 97-122 (a-z)
 const DOWNCASE_ASCII: [u8; 256] = [

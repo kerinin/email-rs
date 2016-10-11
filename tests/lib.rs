@@ -14,7 +14,7 @@ use mail::rfc5322::*;
 fn example_1_1_1() {
     let raw = include_bytes!("example_1_1.1.eml");
 
-    let msg = parse_only(raw_headers, raw);
+    let msg = parse_only(raw_fields, raw);
     assert!(msg.is_ok());
 
     let msg = parse_only(message, raw);
