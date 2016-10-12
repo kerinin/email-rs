@@ -534,7 +534,8 @@ impl<I: U8Input> Field<I> {
     /// Returns true if "structured field" parsing failed
     pub fn is_malformed(&self) -> bool {
         match self {
-            &Field::Received(ref v) =>          v.tokens().is_raw(),
+            // Received formats vary wildly, so ignore it here
+            // &Field::Received(ref v) =>          v.tokens().is_raw(),
             &Field::Date(ref v) =>              v.date_time().is_raw(),
             &Field::From(ref v) =>              v.addresses().is_raw(),
             &Field::Sender(ref v) =>            v.address().is_raw(),

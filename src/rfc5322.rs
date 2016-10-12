@@ -15,6 +15,7 @@ use chomp::*;
 use chomp::types::*;
 use chomp::parsers::*;
 use chomp::combinators::*;
+use chomp::primitives::Primitives;
 
 use super::*;
 use super::util::*;
@@ -1513,18 +1514,43 @@ pub fn drop_field_name<I: U8Input>(i: I, name: &[u8]) -> SimpleResult<I, ()> {
     })
 }
 
-pub fn till_crlf<I: U8Input>(i: I) -> SimpleResult<I, I::Buffer> {
-    scan(i, (false, false), |s, t| {
-        match (s, t) {
-            // Following CRLF
-            ((true, true), _) => None,
-            // LF Following CR
-            ((false, true), 10) => Some((true, true)),
-            // CR
-            (_, 13) => Some((false, true)),
-            _ => Some((false, false)),
+pub fn till_crlf<I: U8Input>(mut i: I) -> SimpleResult<I, I::Buffer> {
+    let start = i.mark();
+    let mut state = (false, false);
+    loop {
+        i.skip_while(|token| {
+            match (state, token) {
+                ((true, true), _) => {
+                    // Following CRLF
+                    state = (false, false); // reset state for next loop
+                    return false
+                },
+                ((false, true), 10) => {
+                    // LF Following CR
+                    state = (true, true);
+                    return true
+                },
+                (_, 13) => {
+                    // CR
+                    state = (false, true);
+                    return true
+                },
+                _ => {
+                    state = (false, false);
+                    return true
+                }
+            }
+        });
+        if let Some(v) = i.peek() {
+            if v == 32 || v == 9 {
+                continue
+            }
         }
-    })
+        break
+    }
+
+    let buf = i.consume_from(start);
+    i.ret(buf)
 }
 
 // subject         =   "Subject:" unstructured CRLF
