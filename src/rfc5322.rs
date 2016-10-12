@@ -1571,6 +1571,14 @@ fn test_raw_received() {
     let i = b"Received: from machine.example by x.y.test; 21 Nov 1997 10:01:22 -0600\x0d\x0a";
     let msg = parse_only(raw_received, i);
     assert!(msg.is_ok());
+    let inner_msg = msg.unwrap();
+    match inner_msg {
+        Field::Received(ref v) => {
+            println!("{:?}", v.tokens());
+        },
+        _ => assert!(false),
+    };
+    assert!(!inner_msg.is_malformed());
 }
 
 // Received: from x.y.test
@@ -2183,14 +2191,17 @@ fn test_raw_obs_orig_date() {
     let i = b"Date: 21 Sep 16 19:51 UTC\x0d\x0a";
     let msg = parse_only(raw_obs_orig_date, i);
     assert!(msg.is_ok());
+    assert!(!msg.unwrap().is_malformed());
 
     let i = b"Date: Thu, 22 Sep 2016 1:46:40 -0700\x0d\x0a";
     let msg = parse_only(raw_obs_orig_date, i);
     assert!(msg.is_ok());
+    assert!(!msg.unwrap().is_malformed());
 
     let i = b"Date: Fri, 21 Nov 1997 09:55:06 -0600\x0d\x0a";
     let msg = parse_only(raw_obs_orig_date, i);
     assert!(msg.is_ok());
+    assert!(!msg.unwrap().is_malformed());
 }
 
 
@@ -2211,15 +2222,19 @@ fn test_raw_obs_from() {
     let i = b"From: =?utf-8?Q?Humble=20Bundle?= <contact@humblebundle.com>\x0d\x0a";
     let msg = parse_only(raw_obs_from, i);
     assert!(msg.is_ok());
+    assert!(!msg.unwrap().is_malformed());
 
     let i = b"From: John Doe <jdoe@machine.example>\x0d\x0a";
     let msg = parse_only(raw_obs_from, i);
     assert!(msg.is_ok());
+    assert!(!msg.unwrap().is_malformed());
 
     let i = b"From: \"Joe Q. Public\" <john.q.public@example.com>\x0d\x0a";
     let msg = parse_only(raw_obs_from, i);
     assert!(msg.is_ok());
-    match msg.unwrap() {
+    let inner_msg = msg.unwrap();
+    assert!(!inner_msg.is_malformed());
+    match inner_msg {
         Field::From(f) => {
             let act = f.addresses();
             let exp = vec!(Address::Mailbox{
@@ -2227,7 +2242,7 @@ fn test_raw_obs_from() {
                 domain: "example.com".to_string(),
                 display_name: Some(Bytes::from_slice(b" Joe Q. Public ")),
             });
-            assert_eq!(act, exp);
+            assert_eq!(act.unwrap(), exp);
         },
         _ => assert!(false),
     }
@@ -2262,10 +2277,12 @@ fn test_raw_obs_reply_to() {
     let i = b"Reply-to: \x0d\x0a";
     let msg = parse_only(raw_obs_reply_to, i);
     assert!(msg.is_ok());
+    assert!(!msg.unwrap().is_malformed());
 
     let i = b"Reply-to: noreply <noreply@facebookmail.com>\x0d\x0a";
     let msg = parse_only(raw_obs_reply_to, i);
     assert!(msg.is_ok());
+    assert!(!msg.unwrap().is_malformed());
 }
 
 // obs-to          =   "To" *WSP ":" address-list CRLF
@@ -2285,6 +2302,7 @@ fn test_raw_obs_to() {
     let i = b"To: Mary Smith <mary@example.net>\x0d\x0a";
     let msg = parse_only(raw_obs_to, i);
     assert!(msg.is_ok());
+    assert!(!msg.unwrap().is_malformed());
 }
 
 // obs-cc          =   "Cc" *WSP ":" address-list CRLF
@@ -2319,6 +2337,7 @@ fn test_raw_obs_message_id() {
     let i = b"Message-ID: <1234@local.machine.example>\x0d\x0a";
     let msg = parse_only(raw_obs_message_id, i);
     assert!(msg.is_ok());
+    assert!(!msg.unwrap().is_malformed());
 }
 
 // obs-in-reply-to =   "In-Reply-To" *WSP ":" *(phrase / msg-id) CRLF
@@ -2351,10 +2370,12 @@ fn test_raw_obs_references() {
     let i = b"References: <comm-tagged-1077147628989448>\x0d\x0a";
     let msg = parse_only(raw_obs_references, i);
     assert!(msg.is_ok());
+    assert!(!msg.unwrap().is_malformed());
 
     let i = b"References: <1234@local.machine.example>\x0d\x0a";
     let msg = parse_only(raw_obs_references, i);
     assert!(msg.is_ok());
+    assert!(!msg.unwrap().is_malformed());
 }
 
 // obs-id-left     =   local-part
@@ -2384,6 +2405,7 @@ fn test_raw_obs_subject() {
     let i = b"Subject: Saying Hello\x0d\x0a";
     let msg = parse_only(raw_obs_subject, i);
     assert!(msg.is_ok());
+    assert!(!msg.unwrap().is_malformed());
 }
 
 // obs-comments    =   "Comments" *WSP ":" unstructured CRLF

@@ -24,6 +24,41 @@ use chomp::combinators::*;
 
 use rfc5322::*;
 
+pub enum FieldValue<T> {
+    Ok(T),
+    Raw(Bytes),
+}
+
+impl<T> FieldValue<T> {
+    pub fn is_ok(&self) -> bool {
+        match self {
+            &FieldValue::Ok(_) => true,
+            _ => false,
+        }
+    }
+    pub fn is_raw(&self) -> bool {
+        match self {
+            &FieldValue::Raw(_) => true,
+            _ => false,
+        }
+    }
+    pub fn unwrap(self) -> T {
+        match self {
+            FieldValue::Ok(v) => v,
+            FieldValue::Raw(b) => panic!("unwrap raw value {:?}", b),
+        }
+    }
+}
+
+impl<T: fmt::Debug> fmt::Debug for FieldValue<T> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        match self {
+            &FieldValue::Ok(ref v) => write!(f, "{:?}", v),
+            &FieldValue::Raw(ref b) => write!(f, "{:?}", b),
+        }
+    }
+}
+
 #[derive(PartialEq)]
 pub enum Day { Mon, Tue, Wed, Thu, Fri, Sat, Sun }
 
@@ -263,7 +298,8 @@ pub struct ReceivedField<I: U8Input> {
 
 impl<I: U8Input> ReceivedField<I> {
     // *received-token ";" date-time
-    pub fn tokens(&self) -> Option<(Vec<Bytes>, DateTime<FixedOffset>)> {
+    pub fn tokens(&self) -> FieldValue<(Vec<Bytes>, DateTime<FixedOffset>)> {
+        let data = self.data.to_vec();
         let parser = |i| {
             many(i, received_token).bind(|i, tokens: Vec<Bytes>| {
                 token(i, b';').then(|i| {
@@ -271,7 +307,10 @@ impl<I: U8Input> ReceivedField<I> {
                 })
             })
         };
-        parse_only(parser, &self.data.to_vec()[..]).ok()
+        match parse_only(parser, &data[..]) {
+            Ok(v) => FieldValue::Ok(v),
+            Err(_) => FieldValue::Raw(Bytes::from_slice(&data[..])),
+        }
     }
 
     pub fn to_string(&self) -> String {
@@ -294,8 +333,12 @@ pub struct DateTimeField<I: U8Input> {
 
 impl<I: U8Input> DateTimeField<I> {
     // date-time
-    pub fn date_time(&self) -> Option<DateTime<FixedOffset>> {
-        parse_only(date_time, &self.data.to_vec()[..]).ok()
+    pub fn date_time(&self) -> FieldValue<DateTime<FixedOffset>> {
+        let data = self.data.to_vec();
+        match parse_only(date_time, &data[..]) {
+            Ok(v) => FieldValue::Ok(v),
+            Err(_) => FieldValue::Raw(Bytes::from_slice(&data[..])),
+        }
     }
 
     pub fn to_string(&self) -> String {
@@ -318,8 +361,12 @@ pub struct AddressesField<I: U8Input> {
 
 impl<I: U8Input> AddressesField<I> {
     // address-list
-    pub fn addresses(&self) -> Vec<Address> {
-        parse_only(address_list, &self.data.to_vec()[..]).unwrap_or(vec!())
+    pub fn addresses(&self) -> FieldValue<Vec<Address>> {
+        let data = self.data.to_vec();
+        match parse_only(address_list, &data[..]) {
+            Ok(v) => FieldValue::Ok(v),
+            Err(_) => FieldValue::Raw(Bytes::from_slice(&data[..])),
+        }
     }
 
     pub fn to_string(&self) -> String {
@@ -343,8 +390,12 @@ pub struct AddressField<I: U8Input> {
 impl<I: U8Input> AddressField<I> {
 
     // mailbox
-    pub fn address(&self) -> Option<Address> {
-        parse_only(mailbox, &self.data.to_vec()[..]).ok()
+    pub fn address(&self) -> FieldValue<Address> {
+        let data = self.data.to_vec();
+        match parse_only(mailbox, &data[..]) {
+            Ok(v) => FieldValue::Ok(v),
+            Err(_) => FieldValue::Raw(Bytes::from_slice(&data[..])),
+        }
     }
 
     pub fn to_string(&self) -> String {
@@ -366,8 +417,12 @@ pub struct MessageIDField<I: U8Input> {
 }
 
 impl<I: U8Input> MessageIDField<I> {
-    pub fn message_id(&self) -> Option<MessageID> {
-        parse_only(msg_id, &self.data.to_vec()[..]).ok()
+    pub fn message_id(&self) -> FieldValue<MessageID> {
+        let data = self.data.to_vec();
+        match parse_only(msg_id, &data[..]) {
+            Ok(v) => FieldValue::Ok(v),
+            Err(_) => FieldValue::Raw(Bytes::from_slice(&data[..])),
+        }
     }
 
     pub fn to_string(&self) -> String {
@@ -392,8 +447,9 @@ impl<I: U8Input> MessageIDsField<I> {
     //  *(phrase / msg-id)
     //  For purposes of interpretation, the phrases in the "In-Reply-To:" and
     //  "References:" fields are ignored.
-    pub fn message_ids(&self) -> Vec<MessageID> {
-        parse_only(|i| {
+    pub fn message_ids(&self) -> FieldValue<Vec<MessageID>> {
+        let data = self.data.to_vec();
+        let parser = |i| {
             many(i, |i| {
                 or(i, 
                    |i| phrase(i).map(|_| None),
@@ -404,7 +460,11 @@ impl<I: U8Input> MessageIDsField<I> {
                     .map(|v| v.unwrap())
                     .collect::<Vec<MessageID>>()
             })
-        }, &self.data.to_vec()[..]).unwrap_or(vec!())
+        };
+        match parse_only(parser, &data[..]) {
+            Ok(v) => FieldValue::Ok(v),
+            Err(_) => FieldValue::Raw(Bytes::from_slice(&data[..])),
+        }
     }
 
     pub fn to_string(&self) -> String {
@@ -474,34 +534,27 @@ impl<I: U8Input> Field<I> {
     /// Returns true if "structured field" parsing failed
     pub fn is_malformed(&self) -> bool {
         match self {
-            &Field::Optional(ref name, _) => {
-                match name.to_lowercase().as_str() {
-                    "date" => true,
-                    "from" => true,
-                    "sender" => true,
-                    "reply-to" => true,
-                    "to" => true,
-                    "cc" => true,
-                    "bcc" => true,
-                    "message-id" => true,
-                    "in-reply-to" => true,
-                    "references" => true,
-                    "subject" => true,
-                    "comments" => true,
-                    "keywords" => true,
-                    "resent-date" => true,
-                    "resent-from" => true,
-                    "resent-sender" => true,
-                    "resent-to" => true,
-                    "resent-cc" => true,
-                    "resent-bcc" => true,
-                    "resent-message-id" => true,
-                    "return-path" => true,
-                    "received" => true,
-                    _ => false,
-                }
-            },
-            _ => false,
+            &Field::Received(ref v) =>          v.tokens().is_raw(),
+            &Field::Date(ref v) =>              v.date_time().is_raw(),
+            &Field::From(ref v) =>              v.addresses().is_raw(),
+            &Field::Sender(ref v) =>            v.address().is_raw(),
+            &Field::ReplyTo(ref v) =>           v.addresses().is_raw(),
+            &Field::To(ref v) =>                v.addresses().is_raw(),
+            &Field::Cc(ref v) =>                v.addresses().is_raw(),
+            &Field::MessageID(ref v) =>         v.message_id().is_raw(),
+            &Field::InReplyTo(ref v) =>         v.message_ids().is_raw(),
+            &Field::References(ref v) =>        v.message_ids().is_raw(),
+            &Field::Subject(ref v) =>           false,
+            &Field::Comments(ref v) =>          false,
+            &Field::ResentFrom(ref v) =>        v.addresses().is_raw(),
+            &Field::ResentSender(ref v) =>      v.address().is_raw(),
+            &Field::ResentDate(ref v) =>        v.date_time().is_raw(),
+            &Field::ResentTo(ref v) =>          v.addresses().is_raw(),
+            &Field::ResentCc(ref v) =>          v.addresses().is_raw(),
+            &Field::ResentBcc(ref v) =>         v.addresses().is_raw(),
+            &Field::ResentMessageID(ref v) =>   v.message_id().is_raw(),
+            &Field::ResentReplyTo(ref v) =>     v.addresses().is_raw(),
+            _ =>                                false,
         }
     }
 }
