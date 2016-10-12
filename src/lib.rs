@@ -27,6 +27,7 @@ use rfc5322::*;
 pub enum FieldValue<T> {
     Ok(T),
     Raw(Bytes),
+    Missing,
 }
 
 impl<T> FieldValue<T> {
@@ -42,10 +43,17 @@ impl<T> FieldValue<T> {
             _ => false,
         }
     }
+    pub fn is_missing(&self) -> bool {
+        match self {
+            &FieldValue::Missing => true,
+            _ => false,
+        }
+    }
     pub fn unwrap(self) -> T {
         match self {
             FieldValue::Ok(v) => v,
             FieldValue::Raw(b) => panic!("unwrap raw value {:?}", b),
+            FieldValue::Missing => panic!("unwrap missing value"),
         }
     }
 }
@@ -55,6 +63,7 @@ impl<T: fmt::Debug> fmt::Debug for FieldValue<T> {
         match self {
             &FieldValue::Ok(ref v) => write!(f, "{:?}", v),
             &FieldValue::Raw(ref b) => write!(f, "{:?}", b),
+            &FieldValue::Missing => write!(f, "<missing>"),
         }
     }
 }
@@ -99,130 +108,94 @@ impl<I: U8Input> Message<I> {
         }
     }
 
-    pub fn from<'a>(&'a self) -> Option<&'a AddressesField<I>> {
+    pub fn from(&self) -> FieldValue<Vec<Address>> {
         self.fields.iter().filter_map(|i| {
             match i {
-                &Field::From(ref f) => Some(f),
+                &Field::From(ref f) => Some(f.addresses()),
                 _ => None,
             }
-        }).next()
+        }).next().unwrap_or(FieldValue::Missing)
     }
 
-    pub fn date<'a>(&'a self) -> Option<&'a DateTimeField<I>> {
+    pub fn date(&self) -> FieldValue<DateTime<FixedOffset>> {
         self.fields.iter().filter_map(|i| {
             match i {
-                &Field::Date(ref f) => Some(f),
+                &Field::Date(ref f) => Some(f.date_time()),
                 _ => None,
             }
-        }).next()
+        }).next().unwrap_or(FieldValue::Missing)
     }
 
-    pub fn sender<'a>(&'a self) -> Option<&'a AddressField<I>> {
+    pub fn sender(&self) -> FieldValue<Address> {
         self.fields.iter().filter_map(|i| {
             match i {
-                &Field::Sender(ref f) => Some(f),
+                &Field::Sender(ref f) => Some(f.address()),
                 _ => None,
             }
-        }).next()
+        }).next().unwrap_or(FieldValue::Missing)
     }
 
-    pub fn reply_to<'a>(&'a self) -> Option<&'a AddressesField<I>> {
+    pub fn reply_to(&self) -> FieldValue<Vec<Address>> {
         self.fields.iter().filter_map(|i| {
             match i {
-                &Field::ReplyTo(ref f) => Some(f),
+                &Field::ReplyTo(ref f) => Some(f.addresses()),
                 _ => None,
             }
-        }).next()
+        }).next().unwrap_or(FieldValue::Missing)
     }
 
-    pub fn to<'a>(&'a self) -> Option<&'a AddressesField<I>> {
+    pub fn to(&self) -> FieldValue<Vec<Address>> {
         self.fields.iter().filter_map(|i| {
             match i {
-                &Field::To(ref f) => Some(f),
+                &Field::To(ref f) => Some(f.addresses()),
                 _ => None,
             }
-        }).next()
+        }).next().unwrap_or(FieldValue::Missing)
     }
 
-    pub fn cc<'a>(&'a self) -> Option<&'a AddressesField<I>> {
+    pub fn cc(&self) -> FieldValue<Vec<Address>> {
         self.fields.iter().filter_map(|i| {
             match i {
-                &Field::Cc(ref f) => Some(f),
+                &Field::Cc(ref f) => Some(f.addresses()),
                 _ => None,
             }
-        }).next()
+        }).next().unwrap_or(FieldValue::Missing)
     }
 
-    pub fn bcc<'a>(&'a self) -> Option<&'a AddressesField<I>> {
+    pub fn bcc(&self) -> FieldValue<Vec<Address>> {
         self.fields.iter().filter_map(|i| {
             match i {
-                &Field::Bcc(ref f) => Some(f),
+                &Field::Bcc(ref f) => Some(f.addresses()),
                 _ => None,
             }
-        }).next()
+        }).next().unwrap_or(FieldValue::Missing)
     }
 
-    pub fn message_id<'a>(&'a self) -> Option<&'a MessageIDField<I>> {
+    pub fn message_id(&self) -> FieldValue<MessageID> {
         self.fields.iter().filter_map(|i| {
             match i {
-                &Field::MessageID(ref f) => Some(f),
+                &Field::MessageID(ref f) => Some(f.message_id()),
                 _ => None,
             }
-        }).next()
+        }).next().unwrap_or(FieldValue::Missing)
     }
 
-    pub fn references<'a>(&'a self) -> Option<&'a MessageIDsField<I>> {
+    pub fn references(&self) -> FieldValue<Vec<MessageID>> {
         self.fields.iter().filter_map(|i| {
             match i {
-                &Field::References(ref f) => Some(f),
+                &Field::References(ref f) => Some(f.message_ids()),
                 _ => None,
             }
-        }).next()
+        }).next().unwrap_or(FieldValue::Missing)
     }
 
-    pub fn in_reply_to<'a>(&'a self) -> Option<&'a MessageIDsField<I>> {
+    pub fn in_reply_to(&self) -> FieldValue<Vec<MessageID>> {
         self.fields.iter().filter_map(|i| {
             match i {
-                &Field::InReplyTo(ref f) => Some(f),
+                &Field::InReplyTo(ref f) => Some(f.message_ids()),
                 _ => None,
             }
-        }).next()
-    }
-
-    pub fn subject<'a>(&'a self) -> Option<&'a UnstructuredField<I>> {
-        self.fields.iter().filter_map(|i| {
-            match i {
-                &Field::Subject(ref f) => Some(f),
-                _ => None,
-            }
-        }).next()
-    }
-
-    pub fn comments<'a>(&'a self) -> Vec<&'a UnstructuredField<I>> {
-        self.fields.iter().filter_map(|i| {
-            match i {
-                &Field::Comments(ref f) => Some(f),
-                _ => None,
-            }
-        }).collect()
-    }
-
-    pub fn keywords<'a>(&'a self) -> Vec<&'a KeywordsField<I>> {
-        self.fields.iter().filter_map(|i| {
-            match i {
-                &Field::Keywords(ref f) => Some(f),
-                _ => None,
-            }
-        }).collect()
-    }
-
-    pub fn optional<'a>(&'a self) -> Vec<(&'a String, &'a UnstructuredField<I>)> {
-        self.fields.iter().filter_map(|i| {
-            match i {
-                &Field::Optional(ref k, ref v) => Some((k, v)),
-                _ => None,
-            }
-        }).collect()
+        }).next().unwrap_or(FieldValue::Missing)
     }
 }
 

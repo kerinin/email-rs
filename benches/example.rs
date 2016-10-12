@@ -5,13 +5,53 @@ extern crate mail;
 
 use bencher::Bencher;
 use chomp::*;
-use mail::rfc5322::raw_fields;
+use mail::rfc5322::{message, raw_fields};
 
 fn example_1_1_1(b: &mut Bencher) {
     let raw = include_bytes!("examples/1_1.1.eml");
 
     b.iter(|| {
         parse_only(raw_fields, raw)
+    })
+}
+
+fn example_1_1_1_date(b: &mut Bencher) {
+    let raw = include_bytes!("examples/1_1.1.eml");
+
+    let msg = parse_only(message, raw).unwrap();
+    let field = msg.date().unwrap();
+    b.iter(|| {
+        field.date_time()
+    })
+}
+
+fn example_1_1_1_from(b: &mut Bencher) {
+    let raw = include_bytes!("examples/1_1.1.eml");
+
+    let msg = parse_only(message, raw).unwrap();
+    let field = msg.from().unwrap();
+    b.iter(|| {
+        field.addresses()
+    })
+}
+
+fn example_1_1_1_message_id(b: &mut Bencher) {
+    let raw = include_bytes!("examples/1_1.1.eml");
+
+    let msg = parse_only(message, raw).unwrap();
+    let field = msg.message_id().unwrap();
+    b.iter(|| {
+        field.message_id()
+    })
+}
+
+fn example_1_1_1_subject(b: &mut Bencher) {
+    let raw = include_bytes!("examples/1_1.1.eml");
+
+    let msg = parse_only(message, raw).unwrap();
+    let field = msg.subject().unwrap();
+    b.iter(|| {
+        field.to_string()
     })
 }
 
@@ -122,6 +162,10 @@ fn example_6_3(b: &mut Bencher) {
 benchmark_group!(
     benches, 
     example_1_1_1,
+    example_1_1_1_date,
+    example_1_1_1_from,
+    example_1_1_1_message_id,
+    example_1_1_1_subject,
     example_1_1_2,
     example_1_2,
     example_1_3,
