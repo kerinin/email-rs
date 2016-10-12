@@ -593,6 +593,10 @@ pub fn date_time<I: U8Input>(i: I) -> SimpleResult<I, DateTime<FixedOffset>> {
 
 #[test]
 fn test_date_time() {
+    let i = b"Thu, 22 Sep 2016 1:46:40 -0700";
+    let msg = parse_only(date_time, i);
+    assert!(msg.is_ok());
+
     let i = b"21 Sep 16 19:51 UTC";
     let msg = parse_only(date_time, i);
     assert!(msg.is_ok());
@@ -705,8 +709,8 @@ pub fn month<I: U8Input>(i: I) -> SimpleResult<I, Month> {
     |i| or(i, |i| string(i, b"Jun").then(|i| i.ret(Month::Jun)),
     |i| or(i, |i| string(i, b"Jul").then(|i| i.ret(Month::Jul)),
     |i| or(i, |i| string(i, b"Aug").then(|i| i.ret(Month::Aug)),
-    |i| or(i, |i| string(i, b"Sep").then(|i| i.ret(Month::Sep)),
     |i| or(i, |i| string(i, b"Sept").then(|i| i.ret(Month::Sep)),
+    |i| or(i, |i| string(i, b"Sep").then(|i| i.ret(Month::Sep)),
     |i| or(i, |i| string(i, b"Oct").then(|i| i.ret(Month::Oct)),
     |i| or(i, |i| string(i, b"Nov").then(|i| i.ret(Month::Nov)),
     |i| string(i, b"Dec").then(|i| i.ret(Month::Dec))))))))))))))
@@ -748,6 +752,10 @@ pub fn time<I: U8Input>(i: I) -> SimpleResult<I, (NaiveTime, FixedOffset)> {
 
 #[test]
 fn test_time() {
+    let i = b"1:46:40 -0700";
+    let msg = parse_only(time, i);
+    assert!(msg.is_ok());
+
     let i = b"19:51 UTC";
     let msg = parse_only(time, i);
     assert!(msg.is_ok());
@@ -785,7 +793,7 @@ pub fn time_of_day<I: U8Input>(i: I) -> SimpleResult<I, NaiveTime> {
 // hour            =   2DIGIT / obs-hour
 pub fn hour<I: U8Input>(i: I) -> SimpleResult<I, usize> {
     or(i,
-       |i| parse_digits(i, 2),
+       |i| parse_digits(i, (1..3)),
        obs_hour)
 }
 
@@ -1926,7 +1934,7 @@ pub fn obs_day<I: U8Input>(i: I) -> SimpleResult<I, usize> {
 // obs-year        =   [CFWS] 2*DIGIT [CFWS]
 pub fn obs_year<I: U8Input>(i: I) -> SimpleResult<I, usize> {
     option(i, drop_cfws, ()).then(|i| {
-        parse_digits(i, (2..4)).bind(|i, n| {
+        parse_digits(i, (2..)).bind(|i, n| {
             option(i, drop_cfws, ()).then(|i| {
                 i.ret(n)
             })
@@ -1937,7 +1945,7 @@ pub fn obs_year<I: U8Input>(i: I) -> SimpleResult<I, usize> {
 // obs-hour        =   [CFWS] 2DIGIT [CFWS]
 pub fn obs_hour<I: U8Input>(i: I) -> SimpleResult<I, usize> {
     option(i, drop_cfws, ()).then(|i| {
-        parse_digits(i, 2).bind(|i, n| {
+        parse_digits(i, (1..3)).bind(|i, n| {
             option(i, drop_cfws, ()).then(|i| {
                 i.ret(n)
             })
@@ -2222,7 +2230,9 @@ fn test_raw_obs_orig_date() {
     let i = b"Date: Thu, 22 Sep 2016 1:46:40 -0700\x0d\x0a";
     let msg = parse_only(raw_obs_orig_date, i);
     assert!(msg.is_ok());
-    assert!(!msg.unwrap().is_malformed());
+    let inner_msg = msg.unwrap();
+    println!("{:?}", inner_msg);
+    assert!(!inner_msg.is_malformed());
 
     let i = b"Date: Fri, 21 Nov 1997 09:55:06 -0600\x0d\x0a";
     let msg = parse_only(raw_obs_orig_date, i);
@@ -2300,11 +2310,6 @@ pub fn raw_obs_reply_to<I: U8Input>(i: I) -> SimpleResult<I, Field<I>> {
 
 #[test]
 fn test_raw_obs_reply_to() {
-    let i = b"Reply-to: \x0d\x0a";
-    let msg = parse_only(raw_obs_reply_to, i);
-    assert!(msg.is_ok());
-    assert!(!msg.unwrap().is_malformed());
-
     let i = b"Reply-to: noreply <noreply@facebookmail.com>\x0d\x0a";
     let msg = parse_only(raw_obs_reply_to, i);
     assert!(msg.is_ok());

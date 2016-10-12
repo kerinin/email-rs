@@ -4,10 +4,6 @@ extern crate chrono;
 extern crate bytes;
 
 use chomp::*;
-use bytes::Bytes;
-use chrono::offset::fixed::FixedOffset;
-use chrono::offset::TimeZone;
-use mail::*;
 use mail::rfc5322::*;
 
 #[test]

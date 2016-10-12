@@ -5,7 +5,6 @@ extern crate mail;
 
 use bencher::Bencher;
 use chomp::*;
-use mail::*;
 use mail::rfc5322::raw_fields;
 
 fn example_1_1_1(b: &mut Bencher) {
