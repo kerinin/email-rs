@@ -244,7 +244,7 @@ pub fn comment<I: U8Input>(i: I) -> SimpleResult<I, ()> {
 
 // CFWS            =   (1*([FWS] comment) [FWS]) / FWS
 //                 =   ([FWS] 1*(comment [FWS])) / FWS
-pub fn cfws<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
+pub fn cfws<I: U8Input>(i: I) -> SimpleResult<I, Vec<I::Buffer>> {
     or(i,
        |i| {
            option(i, fws, vec!()).bind(|i, buf1| {
@@ -254,12 +254,13 @@ pub fn cfws<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
                            fws(i)
                        }, vec!())
                    })
-               }).map(|vs: Vec<Vec<I::Buffer>>| {
-                   vs.into_iter().flat_map(|v| v).fold(Bytes::empty(), |l, r| l.concat(&Bytes::from_slice(&r.into_vec())))
+               }).map(|mut vs: Vec<Vec<I::Buffer>>| {
+                   vs.insert(0, buf1);
+                   vs.into_iter().flat_map(|v| v).collect()
                })
            })
        },
-       |i| fws(i).map(|vs| vs.into_iter().fold(Bytes::empty(), |l, r| l.concat(&Bytes::from_slice(&r.into_vec())))))
+       fws)
 }
 
 pub fn drop_cfws<I: U8Input>(i: I) -> SimpleResult<I, ()> {
@@ -366,14 +367,14 @@ fn test_atext() {
 
 // atom            =   [CFWS] 1*atext [CFWS]
 pub fn atom<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
-    option(i, cfws, Bytes::empty()).bind(|i, cfws1| {
+    option(i, cfws, vec!()).bind(|i, cfws1| {
         matched_by(i, |i| {
             skip_many1(i, atext)
         }).bind(|i, (buf, _)| {
-            option(i, cfws, Bytes::empty()).bind(|i, cfws2| {
-                let b = Bytes::from_slice(&buf.into_vec());
+            option(i, cfws, vec!()).bind(|i, cfws2| {
+                let b = vec!(cfws1, vec!(buf), cfws2).into_iter().flat_map(|v| v).fold(Bytes::empty(), |l, r| l.concat(&Bytes::from_slice(&r.into_vec())));
 
-                i.ret(cfws1.concat(&b).concat(&cfws2))
+                i.ret(b)
             })
         })
     })
@@ -406,11 +407,11 @@ pub fn dot_atom_text<I: U8Input>(i: I) -> SimpleResult<I, I::Buffer> {
 
 // dot-atom        =   [CFWS] dot-atom-text [CFWS]
 pub fn dot_atom<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
-    option(i, cfws, Bytes::empty()).bind(|i, buf1| {
+    option(i, cfws, vec!()).bind(|i, buf1| {
         dot_atom_text(i).bind(|i, buf| {
-            option(i, cfws, Bytes::empty()).bind(|i, buf2| {
-                let t = Bytes::from_slice(&buf.into_vec());
-                i.ret(buf1.concat(&t).concat(&buf2))
+            option(i, cfws, vec!()).bind(|i, buf2| {
+                let b = vec!(buf1, vec!(buf), buf2).into_iter().flat_map(|v| v).fold(Bytes::empty(), |l, r| l.concat(&Bytes::from_slice(&r.into_vec())));
+                i.ret(b)
             })
         })
     })
@@ -474,7 +475,7 @@ fn test_qcontent() {
 // quoted-string; the quoted-string is what is contained between the two
 // quote characters.
 pub fn quoted_string<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
-    option(i, cfws, Bytes::empty()).bind(|i, cfws_bytes_pre| {
+    option(i, cfws, vec!()).bind(|i, cfws_bytes_pre| {
         dquote(i).then(|i| {
             many(i, |i| {
                 option(i, fws, vec!()).bind(|i, fws_bytes| {
@@ -487,13 +488,16 @@ pub fn quoted_string<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
                     })
                 })
             }).map(|bufs: Vec<Bytes>| {
-                bufs.into_iter().fold(cfws_bytes_pre, |l, r| l.concat(&r))
+                let pre = cfws_bytes_pre.into_iter().fold(Bytes::empty(), |l, r| l.concat(&Bytes::from_slice(&r.into_vec())));
+                bufs.into_iter().fold(pre, |l, r| l.concat(&r))
+
             }).bind(|i, buf| {
                 option(i, fws, vec!()).bind(|i, fws_bytes| {
                     dquote(i).then(|i| {
-                        option(i, cfws, Bytes::empty()).bind(|i, cfws_bytes_post| {
+                        option(i, cfws, vec!()).bind(|i, cfws_bytes_post| {
                             let b = fws_bytes.into_iter().fold(Bytes::empty(), |l, r| l.concat(&Bytes::from_slice(&r.into_vec())));
-                            i.ret(buf.concat(&b).concat(&cfws_bytes_post))
+                            let post = cfws_bytes_post.into_iter().fold(Bytes::empty(), |l, r| l.concat(&Bytes::from_slice(&r.into_vec())));
+                            i.ret(buf.concat(&b).concat(&post))
                         })
                     })
                 })
