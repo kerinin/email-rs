@@ -169,7 +169,7 @@ pub fn quoted_pair<I: U8Input>(i: I) -> SimpleResult<I, u8> {
 
 // FWS             =   ([*WSP CRLF] 1*WSP) /  obs-FWS
 //                                        ; Folding white space
-pub fn fws<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
+pub fn fws<I: U8Input>(i: I) -> SimpleResult<I, Vec<I::Buffer>> {
     or(i, 
        |i| {
            option(i, |i| {
@@ -177,19 +177,22 @@ pub fn fws<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
                    skip_many(i, wsp)
                }).bind(|i, (buf1, _)| {
                    crlf(i).then(|i| {
-                       i.ret(Bytes::from_slice(&buf1.into_vec()))
+                       i.ret(Some(buf1))
                    })
                })
-           }, Bytes::empty()).bind(|i, buf1| {
+           }, None).bind(|i, maybe_buf1| {
                matched_by(i, |i| {
                    skip_many1(i, wsp)
                }).map(|(buf2, _)| {
-                   let bytes2 = Bytes::from_slice(&buf2.into_vec());
-                   buf1.concat(&bytes2)
+                   match maybe_buf1 {
+                       Some(_) => vec!(maybe_buf1.unwrap(), buf2),
+                       None => vec!(buf2),
+                   }
                })
            })
        },
        obs_fws)
+       // |i| obs_fws(i).map(|bufs| bufs.into_iter().fold(Bytes::empty(), |l, r| l.concat(&Bytes::from_slice(&r.into_vec())))))
 }
 
 // ctext           =   %d33-39 /          ; Printable US-ASCII
@@ -230,9 +233,9 @@ pub fn ccontent<I: U8Input>(i: I) -> SimpleResult<I, ()> {
 pub fn comment<I: U8Input>(i: I) -> SimpleResult<I, ()> {
     token(i, b'(').then(|i| {
         skip_many(i, |i| {
-            option(i, fws, Bytes::empty()).then(ccontent)
+            option(i, fws, vec!()).then(ccontent)
         }).then(|i| {
-            option(i, fws, Bytes::empty())
+            option(i, fws, vec!())
         })
     }).then(|i| {
         token(i, b')').map(|_| ())
@@ -244,19 +247,19 @@ pub fn comment<I: U8Input>(i: I) -> SimpleResult<I, ()> {
 pub fn cfws<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
     or(i,
        |i| {
-           option(i, fws, Bytes::empty()).bind(|i, buf1| {
+           option(i, fws, vec!()).bind(|i, buf1| {
                many1(i, |i| {
                    comment(i).then(|i| {
                        option(i, |i| {
-                           fws(i).map(|v| Some(v))
-                       }, None)
+                           fws(i)
+                       }, vec!())
                    })
-               }).map(|vs: Vec<Option<Bytes>>| {
-                   vs.into_iter().filter(|v| v.is_some()).fold(buf1, |l, r| l.concat(&r.unwrap()))
+               }).map(|vs: Vec<Vec<I::Buffer>>| {
+                   vs.into_iter().flat_map(|v| v).fold(Bytes::empty(), |l, r| l.concat(&Bytes::from_slice(&r.into_vec())))
                })
            })
        },
-       fws)
+       |i| fws(i).map(|vs| vs.into_iter().fold(Bytes::empty(), |l, r| l.concat(&Bytes::from_slice(&r.into_vec())))))
 }
 
 pub fn drop_cfws<I: U8Input>(i: I) -> SimpleResult<I, ()> {
@@ -474,19 +477,23 @@ pub fn quoted_string<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
     option(i, cfws, Bytes::empty()).bind(|i, cfws_bytes_pre| {
         dquote(i).then(|i| {
             many(i, |i| {
-                option(i, fws, Bytes::empty()).bind(|i, fws_bytes| {
+                option(i, fws, vec!()).bind(|i, fws_bytes| {
                     // NOTE: Take advantage of the buffer
                     matched_by(i, |i| {
                         skip_many1(i, qcontent)
-                    }).map(|(buf, _)| fws_bytes.concat(&Bytes::from_slice(&buf.into_vec())))
+                    }).map(|(buf, _)| {
+                        let b = fws_bytes.into_iter().fold(Bytes::empty(), |l, r| l.concat(&Bytes::from_slice(&r.into_vec())));
+                        b.concat(&Bytes::from_slice(&buf.into_vec()))
+                    })
                 })
             }).map(|bufs: Vec<Bytes>| {
                 bufs.into_iter().fold(cfws_bytes_pre, |l, r| l.concat(&r))
             }).bind(|i, buf| {
-                option(i, fws, Bytes::empty()).bind(|i, fws_bytes| {
+                option(i, fws, vec!()).bind(|i, fws_bytes| {
                     dquote(i).then(|i| {
                         option(i, cfws, Bytes::empty()).bind(|i, cfws_bytes_post| {
-                            i.ret(buf.concat(&fws_bytes).concat(&cfws_bytes_post))
+                            let b = fws_bytes.into_iter().fold(Bytes::empty(), |l, r| l.concat(&Bytes::from_slice(&r.into_vec())));
+                            i.ret(buf.concat(&b).concat(&cfws_bytes_post))
                         })
                     })
                 })
@@ -620,7 +627,7 @@ fn test_date_time() {
 // day-of-week     =   ([FWS] day-name) / obs-day-of-week
 pub fn day_of_week<I: U8Input>(i: I) -> SimpleResult<I, Day> {
     or(i, 
-       |i| option(i, fws, Bytes::empty()).then(day_name),
+       |i| option(i, fws, vec!()).then(day_name),
        obs_day_of_week)
 }
 
@@ -679,7 +686,7 @@ fn test_date() {
 pub fn day<I: U8Input>(i: I) -> SimpleResult<I, usize> {
     or(i,
        |i| {
-           option(i, fws, Bytes::empty()).then(|i| {
+           option(i, fws, vec!()).then(|i| {
                parse_digits(i, (1..3)).bind(|i, d| {
                    fws(i).then(|i| {
                        i.ret(d)
@@ -1796,7 +1803,7 @@ pub fn obs_unstruct_crlf<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
     many(i, |i| {
         or(i,
            |i| take_while1(i, |t| LF_OBS_UTEXT[t as usize]).map(|buf| Bytes::from_slice(&buf.into_vec())),
-           |i| or(i, fws, many1_cr_not_lf))
+           |i| or(i, |i| fws(i).map(|vs| vs.into_iter().fold(Bytes::empty(), |l, r| l.concat(&Bytes::from_slice(&r.into_vec())))), many1_cr_not_lf))
     }).bind(|i, segments: Vec<Bytes>| {
         crlf(i).then(|i| {
             i.ret(segments.into_iter().fold(Bytes::empty(), |l, r| l.concat(&r)))
@@ -1893,7 +1900,7 @@ pub fn obs_phrase_list<I: U8Input>(i: I) -> SimpleResult<I, Vec<Bytes>> {
 }
 
 // obs-FWS         =   1*WSP *(CRLF 1*WSP)
-pub fn obs_fws<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
+pub fn obs_fws<I: U8Input>(i: I) -> SimpleResult<I, Vec<I::Buffer>> {
     matched_by(i, |i| {
         skip_many1(i, wsp)
     }).bind(|i, (buf1, _)| {
@@ -1901,10 +1908,11 @@ pub fn obs_fws<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
             crlf(i).then(|i| {
                 matched_by(i, |i| {
                     skip_many1(i, wsp)
-                }).map(|(buf, _)| Bytes::from_slice(&buf.into_vec()))
+                }).map(|(buf, _)| buf)
             })
-        }).map(|bufs: Vec<Bytes>| {
-            bufs.into_iter().fold(Bytes::from_slice(&buf1.into_vec()), |l, r| l.concat(&r))
+        }).map(|mut bufs: Vec<I::Buffer>| {
+            bufs.insert(0, buf1);
+            bufs
         })
     })
 }
