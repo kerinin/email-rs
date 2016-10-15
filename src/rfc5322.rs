@@ -1182,7 +1182,7 @@ pub fn addr_spec<I: U8Input>(i: I) -> SimpleResult<I, (Bytes, Bytes)> {
     local_part(i).bind(|i, l| {
         token(i, b'@').then(|i| {
             domain(i).bind(|i, d| {
-                i.ret((l, Bytes::from_slice(&d.into_vec())))
+                i.ret((l.into_iter().fold(Bytes::empty(), |l, r| l.concat(&Bytes::from_slice(&r.into_vec()))), Bytes::from_slice(&d.into_vec())))
             })
         })
     })
@@ -1209,12 +1209,10 @@ fn test_addr_spec() {
 
 
 // local-part      =   dot-atom / quoted-string / obs-local-part
-pub fn local_part<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
+pub fn local_part<I: U8Input>(i: I) -> SimpleResult<I, Vec<I::Buffer>> {
     or(i,
-       |i| dot_atom(i).map(|v| v.into_iter().fold(Bytes::empty(), |l, r| l.concat(&Bytes::from_slice(&r.into_vec())))),
-       |i| or(i,
-              |i| quoted_string(i).map(|v| v.into_iter().fold(Bytes::empty(), |l, r| l.concat(&Bytes::from_slice(&r.into_vec())))),
-              |i| obs_local_part(i).map(|v| v.into_iter().fold(Bytes::empty(), |l, r| l.concat(&Bytes::from_slice(&r.into_vec()))))))
+       dot_atom,
+       |i| or(i, quoted_string, obs_local_part))
 }
 
 #[test]
@@ -1499,7 +1497,7 @@ pub fn msg_id<I: U8Input>(i: I) -> SimpleResult<I, MessageID> {
 pub fn id_left<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
     or(i, 
        |i| dot_atom_text(i).map(|buf| Bytes::from_slice(&buf.into_vec())), 
-       obs_id_left)
+       |i| obs_id_left(i).map(|v| v.into_iter().fold(Bytes::empty(), |l, r| l.concat(&Bytes::from_slice(&r.into_vec())))))
 }
 
 // id-right        =   dot-atom-text / no-fold-literal / obs-id-right
@@ -2420,7 +2418,7 @@ fn test_raw_obs_references() {
 }
 
 // obs-id-left     =   local-part
-pub fn obs_id_left<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
+pub fn obs_id_left<I: U8Input>(i: I) -> SimpleResult<I, Vec<I::Buffer>> {
     local_part(i)
 }
 
