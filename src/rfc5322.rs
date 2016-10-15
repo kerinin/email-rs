@@ -862,8 +862,8 @@ pub fn mailbox<I: U8Input>(i: I) -> SimpleResult<I, Address> {
            Address::Mailbox{
                // local_part: unsafe { String::from_utf8_unchecked(local_part.buf().bytes().to_vec()) },
                // domain: unsafe { String::from_utf8_unchecked(domain.buf().bytes().to_vec()) },
-               local_part: String::from_utf8(local_part.buf().bytes().to_vec()).unwrap(),
-               domain: String::from_utf8(domain.buf().bytes().to_vec()).unwrap(),
+               local_part: String::from_utf8(local_part.into_iter().fold(Bytes::empty(), |l, r| l.concat(&Bytes::from_slice(&r.into_vec()))).buf().bytes().to_vec()).unwrap(),
+               domain: String::from_utf8(domain.into_vec()).unwrap(),
                display_name: maybe_display_name,
            }
        }),
@@ -871,8 +871,8 @@ pub fn mailbox<I: U8Input>(i: I) -> SimpleResult<I, Address> {
            Address::Mailbox{
                // local_part: unsafe { String::from_utf8_unchecked(local_part.buf().bytes().to_vec()) },
                // domain: unsafe { String::from_utf8_unchecked(domain.buf().bytes().to_vec()) },
-               local_part: String::from_utf8(local_part.buf().bytes().to_vec()).unwrap(),
-               domain: String::from_utf8(domain.buf().bytes().to_vec()).unwrap(),
+               local_part: String::from_utf8(local_part.into_iter().fold(Bytes::empty(), |l, r| l.concat(&Bytes::from_slice(&r.into_vec()))).buf().bytes().to_vec()).unwrap(),
+               domain: String::from_utf8(domain.into_vec()).unwrap(),
                display_name: None,
            }
        }))
@@ -908,7 +908,7 @@ fn test_mailbox() {
 }
 
 // name-addr       =   [display-name] angle-addr
-pub fn name_addr<I: U8Input>(i: I) -> SimpleResult<I, (Bytes, Bytes, Option<Bytes>)> {
+pub fn name_addr<I: U8Input>(i: I) -> SimpleResult<I, (Vec<I::Buffer>, I::Buffer, Option<Bytes>)> {
     option(i, |i| {
         display_name(i).map(|n| Some(n.into_iter().fold(Bytes::empty(), |l, r| l.concat(&Bytes::from_slice(&r.into_vec())))))
     }, None).bind(|i, n| {
@@ -974,7 +974,7 @@ fn test_name_addr() {
 // angle-addr      =   [CFWS] "<" addr-spec ">" [CFWS] /
 //                     obs-angle-addr
 // NOTE: Not implementing obs-angle-addr because "routing" is bs
-pub fn angle_addr<I: U8Input>(i: I) -> SimpleResult<I, (Bytes, Bytes)> {
+pub fn angle_addr<I: U8Input>(i: I) -> SimpleResult<I, (Vec<I::Buffer>, I::Buffer)> {
     option(i, drop_cfws, ()).then(|i| {
         token(i, b'<').then(|i| {
             addr_spec(i).bind(|i, (l, d)| {
@@ -1178,11 +1178,11 @@ pub fn group_list<I: U8Input>(i: I) -> SimpleResult<I, Option<Vec<Address>>> {
 
 //
 // addr-spec       =   local-part "@" domain
-pub fn addr_spec<I: U8Input>(i: I) -> SimpleResult<I, (Bytes, Bytes)> {
+pub fn addr_spec<I: U8Input>(i: I) -> SimpleResult<I, (Vec<I::Buffer>, I::Buffer)> {
     local_part(i).bind(|i, l| {
         token(i, b'@').then(|i| {
             domain(i).bind(|i, d| {
-                i.ret((l.into_iter().fold(Bytes::empty(), |l, r| l.concat(&Bytes::from_slice(&r.into_vec()))), Bytes::from_slice(&d.into_vec())))
+                i.ret((l, d))
             })
         })
     })
@@ -1472,7 +1472,7 @@ pub fn msg_id<I: U8Input>(i: I) -> SimpleResult<I, MessageID> {
         token(i, b'<').then(|i| {
             option(i, |i| {
                 id_left(i).bind(|i, l| {
-                    token(i, b'@').then(|i| i.ret(l))
+                    token(i, b'@').then(|i| i.ret(l.into_iter().fold(Bytes::empty(), |l, r| l.concat(&Bytes::from_slice(&r.into_vec())))))
                 })
             }, Bytes::empty()).bind(|i, l| {
                 id_right(i).bind(|i, r| {
@@ -1494,10 +1494,10 @@ pub fn msg_id<I: U8Input>(i: I) -> SimpleResult<I, MessageID> {
 }
 
 // id-left         =   dot-atom-text / obs-id-left
-pub fn id_left<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
+pub fn id_left<I: U8Input>(i: I) -> SimpleResult<I, Vec<I::Buffer>> {
     or(i, 
-       |i| dot_atom_text(i).map(|buf| Bytes::from_slice(&buf.into_vec())), 
-       |i| obs_id_left(i).map(|v| v.into_iter().fold(Bytes::empty(), |l, r| l.concat(&Bytes::from_slice(&r.into_vec())))))
+       |i| dot_atom_text(i).map(|buf| vec!(buf)), 
+       obs_id_left)
 }
 
 // id-right        =   dot-atom-text / no-fold-literal / obs-id-right
