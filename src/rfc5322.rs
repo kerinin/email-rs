@@ -864,7 +864,7 @@ pub fn mailbox<I: U8Input>(i: I) -> SimpleResult<I, Address> {
                // domain: unsafe { String::from_utf8_unchecked(domain.buf().bytes().to_vec()) },
                local_part: String::from_utf8(local_part.into_iter().fold(Bytes::empty(), |l, r| l.concat(&Bytes::from_slice(&r.into_vec()))).buf().bytes().to_vec()).unwrap(),
                domain: String::from_utf8(domain.into_vec()).unwrap(),
-               display_name: maybe_display_name,
+               display_name: maybe_display_name.map(|v| v.into_iter().fold(Bytes::empty(), |l, r| l.concat(&Bytes::from_slice(&r.into_vec())))),
            }
        }),
        |i| addr_spec(i).map(|(local_part, domain)| {
@@ -908,9 +908,9 @@ fn test_mailbox() {
 }
 
 // name-addr       =   [display-name] angle-addr
-pub fn name_addr<I: U8Input>(i: I) -> SimpleResult<I, (Vec<I::Buffer>, I::Buffer, Option<Bytes>)> {
+pub fn name_addr<I: U8Input>(i: I) -> SimpleResult<I, (Vec<I::Buffer>, I::Buffer, Option<Vec<I::Buffer>>)> {
     option(i, |i| {
-        display_name(i).map(|n| Some(n.into_iter().fold(Bytes::empty(), |l, r| l.concat(&Bytes::from_slice(&r.into_vec())))))
+        display_name(i).map(|n| Some(n))
     }, None).bind(|i, n| {
         angle_addr(i).bind(|i, (l, d)| {
             i.ret((l, d, n))
@@ -1863,34 +1863,23 @@ fn test_obs_phrase() {
 }
 
 // obs-phrase-list =   [phrase / CFWS] *("," [phrase / CFWS])
-pub fn obs_phrase_list<I: U8Input>(i: I) -> SimpleResult<I, Vec<Bytes>> {
+pub fn obs_phrase_list<I: U8Input>(i: I) -> SimpleResult<I, Vec<Vec<I::Buffer>>> {
     option(i, |i| {
         or(i,
-           |i| phrase(i).map(|buf| Some(buf.into_iter().fold(Bytes::empty(), |l, r| l.concat(&Bytes::from_slice(&r.into_vec()))))),
+           |i| phrase(i).map(|v| Some(v)),
            |i| cfws(i).map(|_| None))
-    }, None).bind(|i, option_phrase1| {
+    }, None).bind(|i, option_phrase1: Option<Vec<I::Buffer>>| {
         many(i, |i| {
             token(i, b',').then(|i| {
                 option(i, |i| {
                     or(i,
-                       |i| phrase(i).map(|buf| Some(buf.into_iter().fold(Bytes::empty(), |l, r| l.concat(&Bytes::from_slice(&r.into_vec()))))),
+                       |i| phrase(i).map(|v| Some(v)),
                        |i| cfws(i).map(|_| None))
                 }, None)
             })
-        }).map(|bufs: Vec<Option<Bytes>>| {
-            // NOTE: Assume worst-case scenario (no cfws parsed)
-            let mut init = Vec::with_capacity(bufs.len()+1);
-            if option_phrase1.is_some() {
-                init.push(option_phrase1.unwrap())
-            }
-
-            bufs.into_iter().fold(init, |mut l, r| {
-                match r {
-                    Some(buf) => {l.push(buf)},
-                    None => {},
-                }
-                l
-            })
+        }).map(|mut bufs: Vec<Option<Vec<I::Buffer>>>| {
+            bufs.insert(0, option_phrase1);
+            bufs.into_iter().filter_map(|v| v).collect()
         })
     })
 }
@@ -2039,32 +2028,25 @@ fn test_obs_zone() {
 
 // obs-domain-list =   *(CFWS / ",") "@" domain
 //                     *("," [CFWS] ["@" domain])
-pub fn obs_domain_list<I: U8Input>(i: I) -> SimpleResult<I, Vec<Bytes>> {
+pub fn obs_domain_list<I: U8Input>(i: I) -> SimpleResult<I, Vec<I::Buffer>> {
     skip_many(i, |i| {
         or(i, drop_cfws, |i| token(i, b',').map(|_| ()))
     }).then(|i| {
         token(i, b'@').then(|i| {
-            domain(i).bind(|i, domain1| {
+            domain(i).bind(|i, domain1: I::Buffer| {
                 many(i, |i| {
                     token(i, b',').then(|i| {
                         option(i, drop_cfws, ()).then(|i| {
                             option(i, |i| {
                                 token(i, b'@').then(|i| {
-                                    domain(i).map(|d| Some(Bytes::from_slice(&d.into_vec())))
+                                    domain(i).map(|d: I::Buffer| Some(d))
                                 })
                             }, None)
                         })
                     })
-                }).map(|bufs: Vec<Option<Bytes>>| {
-                    let mut domains = Vec::with_capacity(bufs.len()+1);
-                    domains.push(Bytes::from_slice(&domain1.into_vec()));
-
-                    bufs.into_iter().fold(domains, |mut l, r| {
-                        if r.is_some() {
-                            l.push(r.unwrap())
-                        }
-                        l
-                    })
+                }).map(|mut bufs: Vec<Option<I::Buffer>>| {
+                    bufs.insert(0, Some(domain1));
+                    bufs.into_iter().filter_map(|v| v).collect()
                 })
             })
         })
