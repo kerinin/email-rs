@@ -192,7 +192,6 @@ pub fn fws<I: U8Input>(i: I) -> SimpleResult<I, Vec<I::Buffer>> {
            })
        },
        obs_fws)
-       // |i| obs_fws(i).map(|bufs| bufs.into_iter().fold(Bytes::empty(), |l, r| l.concat(&Bytes::from_slice(&r.into_vec())))))
 }
 
 // ctext           =   %d33-39 /          ; Printable US-ASCII
@@ -366,13 +365,13 @@ fn test_atext() {
 }
 
 // atom            =   [CFWS] 1*atext [CFWS]
-pub fn atom<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
+pub fn atom<I: U8Input>(i: I) -> SimpleResult<I, Vec<I::Buffer>> {
     option(i, cfws, vec!()).bind(|i, cfws1| {
         matched_by(i, |i| {
             skip_many1(i, atext)
         }).bind(|i, (buf, _)| {
             option(i, cfws, vec!()).bind(|i, cfws2| {
-                let b = vec!(cfws1, vec!(buf), cfws2).into_iter().flat_map(|v| v).fold(Bytes::empty(), |l, r| l.concat(&Bytes::from_slice(&r.into_vec())));
+                let b = vec!(cfws1, vec!(buf), cfws2).into_iter().flat_map(|v| v).collect();
 
                 i.ret(b)
             })
@@ -406,11 +405,11 @@ pub fn dot_atom_text<I: U8Input>(i: I) -> SimpleResult<I, I::Buffer> {
 }
 
 // dot-atom        =   [CFWS] dot-atom-text [CFWS]
-pub fn dot_atom<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
+pub fn dot_atom<I: U8Input>(i: I) -> SimpleResult<I, Vec<I::Buffer>> {
     option(i, cfws, vec!()).bind(|i, buf1| {
         dot_atom_text(i).bind(|i, buf| {
             option(i, cfws, vec!()).bind(|i, buf2| {
-                let b = vec!(buf1, vec!(buf), buf2).into_iter().flat_map(|v| v).fold(Bytes::empty(), |l, r| l.concat(&Bytes::from_slice(&r.into_vec())));
+                let b = vec!(buf1, vec!(buf), buf2).into_iter().flat_map(|v| v).collect();
                 i.ret(b)
             })
         })
@@ -474,30 +473,30 @@ fn test_qcontent() {
 // characters nor the quote characters themselves are part of the
 // quoted-string; the quoted-string is what is contained between the two
 // quote characters.
-pub fn quoted_string<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
+pub fn quoted_string<I: U8Input>(i: I) -> SimpleResult<I, Vec<I::Buffer>> {
     option(i, cfws, vec!()).bind(|i, cfws_bytes_pre| {
         dquote(i).then(|i| {
             many(i, |i| {
-                option(i, fws, vec!()).bind(|i, fws_bytes| {
+                option(i, fws, vec!()).bind(|i, mut fws_bytes| {
                     // NOTE: Take advantage of the buffer
                     matched_by(i, |i| {
                         skip_many1(i, qcontent)
                     }).map(|(buf, _)| {
-                        let b = fws_bytes.into_iter().fold(Bytes::empty(), |l, r| l.concat(&Bytes::from_slice(&r.into_vec())));
-                        b.concat(&Bytes::from_slice(&buf.into_vec()))
+                        fws_bytes.push(buf);
+                        fws_bytes
                     })
                 })
-            }).map(|bufs: Vec<Bytes>| {
-                let pre = cfws_bytes_pre.into_iter().fold(Bytes::empty(), |l, r| l.concat(&Bytes::from_slice(&r.into_vec())));
-                bufs.into_iter().fold(pre, |l, r| l.concat(&r))
+            }).map(|mut bufs: Vec<Vec<I::Buffer>>| {
+                bufs.insert(0, cfws_bytes_pre);
+                bufs.into_iter().flat_map(|v| v).collect()
 
-            }).bind(|i, buf| {
+            }).bind(|i, buf: Vec<I::Buffer>| {
                 option(i, fws, vec!()).bind(|i, fws_bytes| {
                     dquote(i).then(|i| {
                         option(i, cfws, vec!()).bind(|i, cfws_bytes_post| {
-                            let b = fws_bytes.into_iter().fold(Bytes::empty(), |l, r| l.concat(&Bytes::from_slice(&r.into_vec())));
-                            let post = cfws_bytes_post.into_iter().fold(Bytes::empty(), |l, r| l.concat(&Bytes::from_slice(&r.into_vec())));
-                            i.ret(buf.concat(&b).concat(&post))
+                            let v = vec!(buf, fws_bytes, cfws_bytes_post).into_iter().flat_map(|v| v).collect();
+
+                            i.ret(v)
                         })
                     })
                 })
@@ -521,7 +520,7 @@ fn test_quoted_string() {
 }
 
 // word            =   atom / quoted-string
-pub fn word<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
+pub fn word<I: U8Input>(i: I) -> SimpleResult<I, Vec<I::Buffer>> {
     or(i, atom, quoted_string)
 }
 
@@ -549,8 +548,8 @@ pub fn phrase<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
     or(i,
        obs_phrase,
        |i| {
-           many1(i, word).map(|bufs: Vec<Bytes>| {
-               bufs.into_iter().fold(Bytes::empty(), |l, r| l.concat(&r))
+           many1(i, word).map(|bufs: Vec<Vec<I::Buffer>>| {
+               bufs.into_iter().flat_map(|v| v).fold(Bytes::empty(), |l, r| l.concat(&Bytes::from_slice(&r.into_vec())))
            })
        })
 }
@@ -1212,9 +1211,9 @@ fn test_addr_spec() {
 // local-part      =   dot-atom / quoted-string / obs-local-part
 pub fn local_part<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
     or(i,
-       dot_atom,
+       |i| dot_atom(i).map(|v| v.into_iter().fold(Bytes::empty(), |l, r| l.concat(&Bytes::from_slice(&r.into_vec())))),
        |i| or(i,
-              quoted_string,
+              |i| quoted_string(i).map(|v| v.into_iter().fold(Bytes::empty(), |l, r| l.concat(&Bytes::from_slice(&r.into_vec())))),
               obs_local_part))
 }
 
@@ -1644,7 +1643,7 @@ pub fn received_token<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
               |i| matched_by(i, addr_spec).map(|(buf, _)| Bytes::from_slice(&buf.into_vec())),
               |i| or(i,
                      |i| domain(i),
-                     |i| word(i))))
+                     |i| word(i).map(|v| v.into_iter().fold(Bytes::empty(), |l, r| l.concat(&Bytes::from_slice(&r.into_vec())))))))
 }
 
 #[test]
@@ -1849,7 +1848,7 @@ pub fn obs_phrase<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
     word(i).bind(|i, w1| {
         many(i, |i| {
             or(i,
-               word,
+               |i| word(i).map(|v| v.into_iter().fold(Bytes::empty(), |l, r| l.concat(&Bytes::from_slice(&r.into_vec())))),
                |i| or(i,
                       |i| token(i, b'.').bind(|i, _| {
                           i.ret(Bytes::from_slice(&[b'.']))
@@ -1858,7 +1857,8 @@ pub fn obs_phrase<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
                           i.ret(Bytes::empty())
                       })))
         }).map(|bufs: Vec<Bytes>| {
-            bufs.into_iter().fold(w1, |l, r| l.concat(&r))
+            let w1_bytes = w1.into_iter().fold(Bytes::empty(), |l, r| l.concat(&Bytes::from_slice(&r.into_vec())));
+            bufs.into_iter().fold(w1_bytes, |l, r| l.concat(&r))
         })
     })
 }
@@ -2143,10 +2143,11 @@ pub fn obs_local_part<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
     word(i).bind(|i, w1| {
         many(i, |i| {
             token(i, b'.').bind(|i, tok| {
-                word(i).map(|buf| Bytes::from_slice(&[tok]).concat(&buf))
+                word(i).map(|v| v.into_iter().fold(Bytes::from_slice(&[tok]), |l, r| l.concat(&Bytes::from_slice(&r.into_vec()))))
             })
         }).map(|bufs: Vec<Bytes>| {
-            bufs.into_iter().fold(w1, |l, r| l.concat(&r))
+            let w1_buf = w1.into_iter().fold(Bytes::empty(), |l, r| l.concat(&Bytes::from_slice(&r.into_vec())));
+            bufs.into_iter().fold(w1_buf, |l, r| l.concat(&r))
         })
     })
 }
