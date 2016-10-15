@@ -17,6 +17,7 @@ use std::fmt;
 use chrono::datetime::DateTime;
 use chrono::offset::fixed::FixedOffset;
 use bytes::Bytes;
+use bytes::ByteStr;
 use chomp::*;
 use chomp::types::*;
 use chomp::parsers::*;
@@ -271,12 +272,17 @@ pub struct ReceivedField<I: U8Input> {
 
 impl<I: U8Input> ReceivedField<I> {
     // *received-token ";" date-time
+    /*
     pub fn tokens(&self) -> FieldValue<(Vec<Bytes>, DateTime<FixedOffset>)> {
         let data = self.data.to_vec();
         let parser = |i| {
-            many(i, received_token).bind(|i, tokens: Vec<Bytes>| {
+            many(i, received_token).bind(|i, tokens: Vec<Vec<I::Buffer>>| {
                 token(i, b';').then(|i| {
-                    date_time(i).map(|dt: DateTime<FixedOffset>| (tokens, dt))
+                    let token_bytes: Vec<Bytes> = tokens.into_iter().map(|t: Vec<I::Buffer>| {
+                        t.into_iter().fold(Bytes::empty(), |l, r| l.concat(&Bytes::from_slice(&r.into_vec())))
+                    }).collect();
+
+                    date_time(i).map(|dt: DateTime<FixedOffset>| (token_bytes, dt))
                 })
             })
         };
@@ -285,6 +291,7 @@ impl<I: U8Input> ReceivedField<I> {
             Err(_) => FieldValue::Raw(Bytes::from_slice(&data[..])),
         }
     }
+    */
 
     pub fn to_string(&self) -> String {
         let s = &self.data.to_vec()[..self.data.len()-2];

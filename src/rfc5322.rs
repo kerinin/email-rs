@@ -575,7 +575,7 @@ fn test_phrase() {
 
 // unstructured    =   (*([FWS] VCHAR) *WSP) / obs-unstruct
 // TODO: parse new version
-pub fn unstructured_crlf<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
+pub fn unstructured_crlf<I: U8Input>(i: I) -> SimpleResult<I, Vec<I::Buffer>> {
     obs_unstruct_crlf(i)
 }
 
@@ -1182,7 +1182,7 @@ pub fn addr_spec<I: U8Input>(i: I) -> SimpleResult<I, (Bytes, Bytes)> {
     local_part(i).bind(|i, l| {
         token(i, b'@').then(|i| {
             domain(i).bind(|i, d| {
-                i.ret((l, d))
+                i.ret((l, Bytes::from_slice(&d.into_vec())))
             })
         })
     })
@@ -1214,7 +1214,7 @@ pub fn local_part<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
        |i| dot_atom(i).map(|v| v.into_iter().fold(Bytes::empty(), |l, r| l.concat(&Bytes::from_slice(&r.into_vec())))),
        |i| or(i,
               |i| quoted_string(i).map(|v| v.into_iter().fold(Bytes::empty(), |l, r| l.concat(&Bytes::from_slice(&r.into_vec())))),
-              obs_local_part))
+              |i| obs_local_part(i).map(|v| v.into_iter().fold(Bytes::empty(), |l, r| l.concat(&Bytes::from_slice(&r.into_vec()))))))
 }
 
 #[test]
@@ -1231,8 +1231,8 @@ fn test_local_part() {
 
 // domain          =   dot-atom / domain-literal / obs-domain
 // TODO: Support new fields
-pub fn domain<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
-    obs_domain(i).map(|buf| Bytes::from_slice(&buf.into_vec()))
+pub fn domain<I: U8Input>(i: I) -> SimpleResult<I, I::Buffer> {
+    obs_domain(i)
 }
 
 #[test]
@@ -1482,7 +1482,7 @@ pub fn msg_id<I: U8Input>(i: I) -> SimpleResult<I, MessageID> {
                         option(i, drop_cfws, ()).then(|i| {
                             let message_id = MessageID{
                                 id_left: l,
-                                id_right: r,
+                                id_right: Bytes::from_slice(&r.into_vec()),
                             };
                             debug!("parsed msg-id");
 
@@ -1503,12 +1503,10 @@ pub fn id_left<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
 }
 
 // id-right        =   dot-atom-text / no-fold-literal / obs-id-right
-pub fn id_right<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
+pub fn id_right<I: U8Input>(i: I) -> SimpleResult<I, I::Buffer> {
     or(i, 
-       |i| dot_atom_text(i).map(|buf| Bytes::from_slice(&buf.into_vec())), 
-       |i| or(i, 
-              |i| no_fold_literal(i).map(|buf| Bytes::from_slice(&buf.into_vec())),
-              obs_id_right))
+       dot_atom_text,
+       |i| or(i, no_fold_literal, obs_id_right))
 }
 
 // no-fold-literal =   "[" *dtext "]"
@@ -1636,14 +1634,14 @@ fn test_raw_received() {
 // received-token  =   word / angle-addr / addr-spec / domain
 // NOTE: matching word last, since it's the most restrictive
 //                 =   angle-addr / addr-spec / domain / word
-pub fn received_token<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
+pub fn received_token<I: U8Input>(i: I) -> SimpleResult<I, Vec<I::Buffer>> {
     or(i,
-       |i| matched_by(i, angle_addr).map(|(buf, _)| Bytes::from_slice(&buf.into_vec())),
+       |i| matched_by(i, angle_addr).map(|(buf, _)| vec!(buf)),
        |i| or(i,
-              |i| matched_by(i, addr_spec).map(|(buf, _)| Bytes::from_slice(&buf.into_vec())),
+              |i| matched_by(i, addr_spec).map(|(buf, _)| vec!(buf)),
               |i| or(i,
-                     |i| domain(i),
-                     |i| word(i).map(|v| v.into_iter().fold(Bytes::empty(), |l, r| l.concat(&Bytes::from_slice(&r.into_vec())))))))
+                     |i| domain(i).map(|v| vec!(v)),
+                     |i| word(i))))
 }
 
 #[test]
@@ -1802,19 +1800,19 @@ const LF_OBS_UTEXT: [bool; 256] = [
     false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, // 220 - 239
     false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false                              // 240 - 256
 ];
-pub fn obs_unstruct_crlf<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
+pub fn obs_unstruct_crlf<I: U8Input>(i: I) -> SimpleResult<I, Vec<I::Buffer>> {
     many(i, |i| {
         or(i,
-           |i| take_while1(i, |t| LF_OBS_UTEXT[t as usize]).map(|buf| Bytes::from_slice(&buf.into_vec())),
-           |i| or(i, |i| fws(i).map(|vs| vs.into_iter().fold(Bytes::empty(), |l, r| l.concat(&Bytes::from_slice(&r.into_vec())))), many1_cr_not_lf))
-    }).bind(|i, segments: Vec<Bytes>| {
+           |i| take_while1(i, |t| LF_OBS_UTEXT[t as usize]).map(|buf| vec!(buf)),
+           |i| or(i, fws, |i| many1_cr_not_lf(i).map(|v| vec!(v))))
+    }).bind(|i, segments: Vec<Vec<I::Buffer>>| {
         crlf(i).then(|i| {
-            i.ret(segments.into_iter().fold(Bytes::empty(), |l, r| l.concat(&r)))
+            i.ret(segments.into_iter().flat_map(|v| v).collect())
         })
     })
 }
 
-pub fn many1_cr_not_lf<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
+pub fn many1_cr_not_lf<I: U8Input>(i: I) -> SimpleResult<I, I::Buffer> {
     matched_by(i, |i| {
         skip_many1(i, |i| {
             token(i, 13).then(|i| {
@@ -1827,7 +1825,7 @@ pub fn many1_cr_not_lf<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
                 })
             })
         })
-    }).map(|(buf, _)| Bytes::from_slice(&buf.into_vec()))
+    }).map(|(buf, _)| buf)
 }
 
 #[test]
@@ -2054,14 +2052,14 @@ pub fn obs_domain_list<I: U8Input>(i: I) -> SimpleResult<I, Vec<Bytes>> {
                         option(i, drop_cfws, ()).then(|i| {
                             option(i, |i| {
                                 token(i, b'@').then(|i| {
-                                    domain(i).map(|d| Some(d))
+                                    domain(i).map(|d| Some(Bytes::from_slice(&d.into_vec())))
                                 })
                             }, None)
                         })
                     })
                 }).map(|bufs: Vec<Option<Bytes>>| {
                     let mut domains = Vec::with_capacity(bufs.len()+1);
-                    domains.push(domain1);
+                    domains.push(Bytes::from_slice(&domain1.into_vec()));
 
                     bufs.into_iter().fold(domains, |mut l, r| {
                         if r.is_some() {
@@ -2135,15 +2133,18 @@ pub fn obs_addr_list<I: U8Input>(i: I) -> SimpleResult<I, Vec<Address>> {
 // NOTE: Pretty sure this is wrong
 
 // obs-local-part  =   word *("." word)
-pub fn obs_local_part<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
+pub fn obs_local_part<I: U8Input>(i: I) -> SimpleResult<I, Vec<I::Buffer>> {
     word(i).bind(|i, w1| {
         many(i, |i| {
-            token(i, b'.').bind(|i, tok| {
-                word(i).map(|v| v.into_iter().fold(Bytes::from_slice(&[tok]), |l, r| l.concat(&Bytes::from_slice(&r.into_vec()))))
+            take_while(i, |t| t == b'.').bind(|i, tok| {
+                word(i).map(|mut v| {
+                    v.insert(0, tok);
+                    v
+                })
             })
-        }).map(|bufs: Vec<Bytes>| {
-            let w1_buf = w1.into_iter().fold(Bytes::empty(), |l, r| l.concat(&Bytes::from_slice(&r.into_vec())));
-            bufs.into_iter().fold(w1_buf, |l, r| l.concat(&r))
+        }).map(|mut bufs: Vec<Vec<I::Buffer>>| {
+            bufs.insert(0, w1);
+            bufs.into_iter().flat_map(|v| v).collect()
         })
     })
 }
@@ -2424,7 +2425,7 @@ pub fn obs_id_left<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
 }
 
 // obs-id-right    =   domain
-pub fn obs_id_right<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
+pub fn obs_id_right<I: U8Input>(i: I) -> SimpleResult<I, I::Buffer> {
     domain(i)
 }
 
