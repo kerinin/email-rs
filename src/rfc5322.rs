@@ -544,12 +544,12 @@ fn test_word() {
 
 // phrase          =   1*word / obs-phrase
 // NOTE: Matching obs-phrase first to avoid early termination on '.'
-pub fn phrase<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
+pub fn phrase<I: U8Input>(i: I) -> SimpleResult<I, Vec<I::Buffer>> {
     or(i,
        obs_phrase,
        |i| {
            many1(i, word).map(|bufs: Vec<Vec<I::Buffer>>| {
-               bufs.into_iter().flat_map(|v| v).fold(Bytes::empty(), |l, r| l.concat(&Bytes::from_slice(&r.into_vec())))
+               bufs.into_iter().flat_map(|v| v).collect()
            })
        })
 }
@@ -910,7 +910,7 @@ fn test_mailbox() {
 // name-addr       =   [display-name] angle-addr
 pub fn name_addr<I: U8Input>(i: I) -> SimpleResult<I, (Bytes, Bytes, Option<Bytes>)> {
     option(i, |i| {
-        display_name(i).map(|n| Some(n))
+        display_name(i).map(|n| Some(n.into_iter().fold(Bytes::empty(), |l, r| l.concat(&Bytes::from_slice(&r.into_vec())))))
     }, None).bind(|i, n| {
         angle_addr(i).bind(|i, (l, d)| {
             i.ret((l, d, n))
@@ -1012,12 +1012,12 @@ pub fn group<I: U8Input>(i: I) -> SimpleResult<I, Address> {
                     option(i, drop_cfws, ()).then(|i| {
                         let g = if l.is_some() {
                             Address::Group{
-                                display_name: n,
+                                display_name: n.into_iter().fold(Bytes::empty(), |l, r| l.concat(&Bytes::from_slice(&r.into_vec()))),
                                 mailboxes: l.unwrap(),
                             }
                         } else {
                             Address::Group{
-                                display_name: n,
+                                display_name: n.into_iter().fold(Bytes::empty(), |l, r| l.concat(&Bytes::from_slice(&r.into_vec()))),
                                 mailboxes: vec!(),
                             }
                         };
@@ -1042,7 +1042,7 @@ fn test_group() {
 
 //
 // display-name    =   phrase
-pub fn display_name<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
+pub fn display_name<I: U8Input>(i: I) -> SimpleResult<I, Vec<I::Buffer>> {
     phrase(i)
 }
 
@@ -1844,21 +1844,17 @@ fn test_many1_cr_not_lf() {
 }
 
 // obs-phrase      =   word *(word / "." / CFWS)
-pub fn obs_phrase<I: U8Input>(i: I) -> SimpleResult<I, Bytes> {
+pub fn obs_phrase<I: U8Input>(i: I) -> SimpleResult<I, Vec<I::Buffer>> {
     word(i).bind(|i, w1| {
         many(i, |i| {
             or(i,
-               |i| word(i).map(|v| v.into_iter().fold(Bytes::empty(), |l, r| l.concat(&Bytes::from_slice(&r.into_vec())))),
+               word,
                |i| or(i,
-                      |i| token(i, b'.').bind(|i, _| {
-                          i.ret(Bytes::from_slice(&[b'.']))
-                      }),
-                      |i| cfws(i).bind(|i, _| {
-                          i.ret(Bytes::empty())
-                      })))
-        }).map(|bufs: Vec<Bytes>| {
-            let w1_bytes = w1.into_iter().fold(Bytes::empty(), |l, r| l.concat(&Bytes::from_slice(&r.into_vec())));
-            bufs.into_iter().fold(w1_bytes, |l, r| l.concat(&r))
+                      |i| take_while1(i, |t| t == b'.').map(|v| vec!(v)),
+                      |i| cfws(i)))
+        }).map(|mut bufs: Vec<Vec<I::Buffer>>| {
+            bufs.insert(0, w1);
+            bufs.into_iter().flat_map(|v| v).collect()
         })
     })
 }
@@ -1874,14 +1870,14 @@ fn test_obs_phrase() {
 pub fn obs_phrase_list<I: U8Input>(i: I) -> SimpleResult<I, Vec<Bytes>> {
     option(i, |i| {
         or(i,
-           |i| phrase(i).map(|buf| Some(buf)),
+           |i| phrase(i).map(|buf| Some(buf.into_iter().fold(Bytes::empty(), |l, r| l.concat(&Bytes::from_slice(&r.into_vec()))))),
            |i| cfws(i).map(|_| None))
     }, None).bind(|i, option_phrase1| {
         many(i, |i| {
             token(i, b',').then(|i| {
                 option(i, |i| {
                     or(i,
-                       |i| phrase(i).map(|buf| Some(buf)),
+                       |i| phrase(i).map(|buf| Some(buf.into_iter().fold(Bytes::empty(), |l, r| l.concat(&Bytes::from_slice(&r.into_vec()))))),
                        |i| cfws(i).map(|_| None))
                 }, None)
             })
