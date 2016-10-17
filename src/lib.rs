@@ -80,10 +80,10 @@ pub enum Address {
     Mailbox {
         local_part: String,
         domain: String,
-        display_name: Option<Bytes>,
+        display_name: Option<String>,
     },
     Group {
-        display_name: Bytes,
+        display_name: String,
         mailboxes: Vec<Address>,
     },
 }

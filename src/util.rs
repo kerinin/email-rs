@@ -10,6 +10,16 @@ use chomp::primitives::Primitives;
 // use chomp::primitives::IntoInner;
 // use chomp::combinators::bounded;
 
+pub fn unchecked_string_from_bufs<I: U8Input>(bufs: Vec<I::Buffer>) -> String {
+    let len = bufs.iter().fold(0, |l, buf| l + buf.len());
+    let mut bytes = Vec::with_capacity(len);
+    for buffer in bufs.into_iter() {
+        bytes.append(&mut buffer.into_vec());
+    }
+
+    unsafe { String::from_utf8_unchecked(bytes) }
+}
+
 fn is_digit(c: u8) -> bool {
     48 <= c && c <= 57
 }

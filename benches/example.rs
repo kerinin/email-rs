@@ -19,9 +19,8 @@ fn example_1_1_1_date(b: &mut Bencher) {
     let raw = include_bytes!("examples/1_1.1.eml");
 
     let msg = parse_only(message, raw).unwrap();
-    let field = msg.date().unwrap();
     b.iter(|| {
-        field.date_time()
+        msg.date()
     })
 }
 
@@ -29,9 +28,8 @@ fn example_1_1_1_from(b: &mut Bencher) {
     let raw = include_bytes!("examples/1_1.1.eml");
 
     let msg = parse_only(message, raw).unwrap();
-    let field = msg.from().unwrap();
     b.iter(|| {
-        field.addresses()
+        msg.from()
     })
 }
 
@@ -39,21 +37,21 @@ fn example_1_1_1_message_id(b: &mut Bencher) {
     let raw = include_bytes!("examples/1_1.1.eml");
 
     let msg = parse_only(message, raw).unwrap();
-    let field = msg.message_id().unwrap();
     b.iter(|| {
-        field.message_id()
+        msg.message_id()
     })
 }
 
+/*
 fn example_1_1_1_subject(b: &mut Bencher) {
     let raw = include_bytes!("examples/1_1.1.eml");
 
     let msg = parse_only(message, raw).unwrap();
-    let field = msg.subject().unwrap();
     b.iter(|| {
-        field.to_string()
+        msg.subject().unwrap().to_string();
     })
 }
+*/
 
 fn example_1_1_2(b: &mut Bencher) {
     let raw = include_bytes!("examples/1_1.2.eml");
@@ -165,7 +163,7 @@ benchmark_group!(
     example_1_1_1_date,
     example_1_1_1_from,
     example_1_1_1_message_id,
-    example_1_1_1_subject,
+    // example_1_1_1_subject,
     example_1_1_2,
     example_1_2,
     example_1_3,

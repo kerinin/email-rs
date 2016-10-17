@@ -897,19 +897,15 @@ pub fn mailbox<I: U8Input>(i: I) -> SimpleResult<I, Address> {
     or(i,
        |i| name_addr(i).map(|(local_part, domain, maybe_display_name)| {
            Address::Mailbox{
-               // local_part: unsafe { String::from_utf8_unchecked(local_part.buf().bytes().to_vec()) },
-               // domain: unsafe { String::from_utf8_unchecked(domain.buf().bytes().to_vec()) },
-               local_part: String::from_utf8(local_part.into_iter().fold(Bytes::empty(), |l, r| l.concat(&Bytes::from_slice(&r.into_vec()))).buf().bytes().to_vec()).unwrap(),
-               domain: String::from_utf8(domain.into_vec()).unwrap(),
-               display_name: maybe_display_name.map(|v| v.into_iter().fold(Bytes::empty(), |l, r| l.concat(&Bytes::from_slice(&r.into_vec())))),
+               local_part: unchecked_string_from_bufs::<I>(local_part),
+               domain: unsafe { String::from_utf8_unchecked(domain.into_vec()) },
+               display_name: maybe_display_name.map(|v| unchecked_string_from_bufs::<I>(v)),
            }
        }),
        |i| addr_spec(i).map(|(local_part, domain)| {
            Address::Mailbox{
-               // local_part: unsafe { String::from_utf8_unchecked(local_part.buf().bytes().to_vec()) },
-               // domain: unsafe { String::from_utf8_unchecked(domain.buf().bytes().to_vec()) },
-               local_part: String::from_utf8(local_part.into_iter().fold(Bytes::empty(), |l, r| l.concat(&Bytes::from_slice(&r.into_vec()))).buf().bytes().to_vec()).unwrap(),
-               domain: String::from_utf8(domain.into_vec()).unwrap(),
+               local_part: unchecked_string_from_bufs::<I>(local_part),
+               domain: unsafe { String::from_utf8_unchecked(domain.into_vec()) },
                display_name: None,
            }
        }))
@@ -939,7 +935,7 @@ fn test_mailbox() {
     let expected = Address::Mailbox{
         local_part: "john.q.public".to_string(),
         domain: "example.com".to_string(),
-        display_name: Some(Bytes::from_slice(b" Joe Q. Public ")),
+        display_name: Some(" Joe Q. Public ".to_string()),
     };
     assert_eq!(msg.unwrap(), expected);
 }
@@ -1064,12 +1060,12 @@ pub fn group<I: U8Input>(i: I) -> SimpleResult<I, Address> {
                     option(i, drop_cfws, ()).then(|i| {
                         let g = if l.is_some() {
                             Address::Group{
-                                display_name: n.into_iter().fold(Bytes::empty(), |l, r| l.concat(&Bytes::from_slice(&r.into_vec()))),
+                                display_name: unchecked_string_from_bufs::<I>(n),
                                 mailboxes: l.unwrap(),
                             }
                         } else {
                             Address::Group{
-                                display_name: n.into_iter().fold(Bytes::empty(), |l, r| l.concat(&Bytes::from_slice(&r.into_vec()))),
+                                display_name: unchecked_string_from_bufs::<I>(n),
                                 mailboxes: vec!(),
                             }
                         };
@@ -1168,7 +1164,7 @@ fn test_mailbox_list() {
     let expected = Address::Mailbox{
         local_part: "john.q.public".to_string(),
         domain: "example.com".to_string(),
-        display_name: Some(Bytes::from_slice(b" Joe Q. Public ")),
+        display_name: Some(" Joe Q. Public ".to_string()),
     };
     assert_eq!(msg.unwrap(), vec![expected]);
 
@@ -2326,7 +2322,7 @@ fn test_raw_obs_from() {
             let exp = vec!(Address::Mailbox{
                 local_part: "john.q.public".to_string(),
                 domain: "example.com".to_string(),
-                display_name: Some(Bytes::from_slice(b" Joe Q. Public ")),
+                display_name: Some(" Joe Q. Public ".to_string()),
             });
             assert_eq!(act.unwrap(), exp);
         },
