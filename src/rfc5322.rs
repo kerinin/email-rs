@@ -170,7 +170,7 @@ pub fn quoted_pair<I: U8Input>(i: I) -> SimpleResult<I, u8> {
 
 // FWS             =   ([*WSP CRLF] 1*WSP) /  obs-FWS
 //                                        ; Folding white space
-pub fn fws<I: U8Input>(i: I, mut into: Vec<I::Buffer>) -> SimpleResult<I, Vec<I::Buffer>> {
+pub fn fws<I: U8Input>(i: I) -> SimpleResult<I, Vec<I::Buffer>> {
     or(i, 
        |i| {
            option(i, |i| {
@@ -186,59 +186,13 @@ pub fn fws<I: U8Input>(i: I, mut into: Vec<I::Buffer>) -> SimpleResult<I, Vec<I:
                    skip_many1(i, wsp)
                }).map(|(buf2, _)| {
                    match maybe_buf1 {
-                       Some(_) => {
-                           into.push(maybe_buf1.unwrap());
-                           into.push(buf2);
-                       },
-                       None => {
-                           into.push(buf2);
-                       },
+                       Some(_) => vec!(maybe_buf1.unwrap(), buf2),
+                       None => vec!(buf2),
                    }
-                   into
                })
            })
        },
        obs_fws)
-}
-// like option(i, |i| fws(i, vec!()), vec!()) but doesn't require copying the
-// input
-pub fn maybe_fws<I: U8Input>(i: I, mut into: Vec<I::Buffer>) -> SimpleResult<I, Vec<I::Buffer>> {
-    let parser = |i: I| {
-        option(i, |i| {
-            matched_by(i, |i| {
-                skip_many(i, wsp)
-            }).bind(|i, (buf1, _)| {
-                crlf(i).then(|i| {
-                    i.ret(Some(buf1))
-                })
-            })
-        }, None).bind(|i, maybe_buf1| {
-            matched_by(i, |i| {
-                skip_many1(i, wsp)
-            }).map(|(buf2, _)| (maybe_buf1, buf2))
-        })
-    };
-
-    match parser(i).into_inner() {
-        (i, Ok((maybe_buf1, buf2))) => {
-            match maybe_buf1 {
-                Some(_) => {
-                    into.push(maybe_buf1.unwrap());
-                    into.push(buf2);
-                },
-                None => {
-                    into.push(buf2);
-                },
-            }
-            i.ret(into)
-        },
-        (i, Err(_)) => {
-            match obs_fws(i).into_inner() {
-                (i, Ok(v)) => i.ret(v),
-                (i, Err(_)) => i.ret(into),
-            }
-        },
-    }
 }
 
 pub fn drop_fws<I: U8Input>(i: I) -> SimpleResult<I, ()> {
@@ -254,6 +208,7 @@ pub fn drop_fws<I: U8Input>(i: I) -> SimpleResult<I, ()> {
        },
        drop_obs_fws)
 }
+
 
 // ctext           =   %d33-39 /          ; Printable US-ASCII
 //                     %d42-91 /          ;  characters not including
@@ -305,15 +260,13 @@ pub fn comment<I: U8Input>(i: I) -> SimpleResult<I, ()> {
 // CFWS            =   (1*([FWS] comment) [FWS]) / FWS
 //                 =   ([FWS] 1*(comment [FWS])) / FWS
 pub fn cfws<I: U8Input>(i: I) -> SimpleResult<I, Vec<I::Buffer>> {
-    // TODO: Thread this vec through more - maybe scan instead of many1?
-    let mut into: Vec<I::Buffer> = Vec::with_capacity(10);
     or(i,
        |i| {
-           maybe_fws(i, into).bind(|i, buf1| {
+           option(i, fws, vec!()).bind(|i, buf1| {
                many1(i, |i| {
                    comment(i).then(|i| {
                        option(i, |i| {
-                           fws(i, vec!())
+                           fws(i)
                        }, vec!())
                    })
                }).map(|mut vs: Vec<Vec<I::Buffer>>| {
@@ -322,7 +275,7 @@ pub fn cfws<I: U8Input>(i: I) -> SimpleResult<I, Vec<I::Buffer>> {
                })
            })
        },
-       |i| fws(i, vec!()))
+       fws)
 }
 
 pub fn drop_cfws<I: U8Input>(i: I) -> SimpleResult<I, ()> {
@@ -540,7 +493,7 @@ pub fn quoted_string<I: U8Input>(i: I) -> SimpleResult<I, Vec<I::Buffer>> {
     option(i, cfws, vec!()).bind(|i, cfws_bytes_pre| {
         dquote(i).then(|i| {
             many(i, |i| {
-                option(i, |i| fws(i, vec!()), vec!()).bind(|i, mut fws_bytes| {
+                option(i, fws, vec!()).bind(|i, mut fws_bytes| {
                     // NOTE: Take advantage of the buffer
                     matched_by(i, |i| {
                         skip_many1(i, qcontent)
@@ -554,7 +507,7 @@ pub fn quoted_string<I: U8Input>(i: I) -> SimpleResult<I, Vec<I::Buffer>> {
                 bufs.into_iter().flat_map(|v| v).collect()
 
             }).bind(|i, buf: Vec<I::Buffer>| {
-                option(i, |i| fws(i, vec!()), vec!()).bind(|i, fws_bytes| {
+                option(i, fws, vec!()).bind(|i, fws_bytes| {
                     dquote(i).then(|i| {
                         option(i, cfws, vec!()).bind(|i, cfws_bytes_post| {
                             let v = vec!(buf, fws_bytes, cfws_bytes_post).into_iter().flat_map(|v| v).collect();
@@ -1923,7 +1876,7 @@ pub fn obs_unstruct_crlf<I: U8Input>(i: I) -> SimpleResult<I, Vec<I::Buffer>> {
     many(i, |i| {
         or(i,
            |i| take_while1(i, |t| LF_OBS_UTEXT[t as usize]).map(|buf| vec!(buf)),
-           |i| or(i, |i| fws(i, vec!()), |i| many1_cr_not_lf(i).map(|v| vec!(v))))
+           |i| or(i, fws, |i| many1_cr_not_lf(i).map(|v| vec!(v))))
     }).bind(|i, segments: Vec<Vec<I::Buffer>>| {
         crlf(i).then(|i| {
             i.ret(segments.into_iter().flat_map(|v| v).collect())
