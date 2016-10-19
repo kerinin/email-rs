@@ -90,8 +90,8 @@ pub enum Address {
 
 #[derive(Debug, PartialEq)]
 pub struct MessageID {
-    pub id_left: Bytes,
-    pub id_right: Bytes,
+    pub id_left: Option<String>,
+    pub id_right: String,
 }
 
 #[derive(Debug, PartialEq)]

@@ -7,7 +7,7 @@ use chomp::types::*;
 use chomp::parsers::*;
 use chomp::combinators::*;
 use chomp::primitives::Primitives;
-// use chomp::primitives::IntoInner;
+use chomp::primitives::IntoInner;
 // use chomp::combinators::bounded;
 
 pub fn unchecked_string_from_bufs<I: U8Input>(bufs: Vec<I::Buffer>) -> String {

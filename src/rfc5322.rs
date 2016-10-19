@@ -16,6 +16,7 @@ use chomp::types::*;
 use chomp::parsers::*;
 use chomp::combinators::*;
 use chomp::primitives::Primitives;
+use chomp::primitives::IntoInner;
 
 use super::*;
 use super::util::*;
@@ -169,7 +170,7 @@ pub fn quoted_pair<I: U8Input>(i: I) -> SimpleResult<I, u8> {
 
 // FWS             =   ([*WSP CRLF] 1*WSP) /  obs-FWS
 //                                        ; Folding white space
-pub fn fws<I: U8Input>(i: I) -> SimpleResult<I, Vec<I::Buffer>> {
+pub fn fws<I: U8Input>(i: I, mut into: Vec<I::Buffer>) -> SimpleResult<I, Vec<I::Buffer>> {
     or(i, 
        |i| {
            option(i, |i| {
@@ -185,13 +186,73 @@ pub fn fws<I: U8Input>(i: I) -> SimpleResult<I, Vec<I::Buffer>> {
                    skip_many1(i, wsp)
                }).map(|(buf2, _)| {
                    match maybe_buf1 {
-                       Some(_) => vec!(maybe_buf1.unwrap(), buf2),
-                       None => vec!(buf2),
+                       Some(_) => {
+                           into.push(maybe_buf1.unwrap());
+                           into.push(buf2);
+                       },
+                       None => {
+                           into.push(buf2);
+                       },
                    }
+                   into
                })
            })
        },
        obs_fws)
+}
+// like option(i, |i| fws(i, vec!()), vec!()) but doesn't require copying the
+// input
+pub fn maybe_fws<I: U8Input>(i: I, mut into: Vec<I::Buffer>) -> SimpleResult<I, Vec<I::Buffer>> {
+    let parser = |i: I| {
+        option(i, |i| {
+            matched_by(i, |i| {
+                skip_many(i, wsp)
+            }).bind(|i, (buf1, _)| {
+                crlf(i).then(|i| {
+                    i.ret(Some(buf1))
+                })
+            })
+        }, None).bind(|i, maybe_buf1| {
+            matched_by(i, |i| {
+                skip_many1(i, wsp)
+            }).map(|(buf2, _)| (maybe_buf1, buf2))
+        })
+    };
+
+    match parser(i).into_inner() {
+        (i, Ok((maybe_buf1, buf2))) => {
+            match maybe_buf1 {
+                Some(_) => {
+                    into.push(maybe_buf1.unwrap());
+                    into.push(buf2);
+                },
+                None => {
+                    into.push(buf2);
+                },
+            }
+            i.ret(into)
+        },
+        (i, Err(_)) => {
+            match obs_fws(i).into_inner() {
+                (i, Ok(v)) => i.ret(v),
+                (i, Err(_)) => i.ret(into),
+            }
+        },
+    }
+}
+
+pub fn drop_fws<I: U8Input>(i: I) -> SimpleResult<I, ()> {
+    or(i, 
+       |i| {
+           option(i, |i| {
+               skip_many(i, wsp).then(|i| {
+                   crlf(i).map(|v| ())
+               })
+           }, ()).bind(|i, maybe_buf1| {
+               skip_many1(i, wsp).map(|_| ())
+           })
+       },
+       drop_obs_fws)
 }
 
 // ctext           =   %d33-39 /          ; Printable US-ASCII
@@ -232,9 +293,9 @@ pub fn ccontent<I: U8Input>(i: I) -> SimpleResult<I, ()> {
 pub fn comment<I: U8Input>(i: I) -> SimpleResult<I, ()> {
     token(i, b'(').then(|i| {
         skip_many(i, |i| {
-            option(i, fws, vec!()).then(ccontent)
+            option(i, drop_fws, ()).then(ccontent)
         }).then(|i| {
-            option(i, fws, vec!())
+            option(i, drop_fws, ())
         })
     }).then(|i| {
         token(i, b')').map(|_| ())
@@ -244,13 +305,15 @@ pub fn comment<I: U8Input>(i: I) -> SimpleResult<I, ()> {
 // CFWS            =   (1*([FWS] comment) [FWS]) / FWS
 //                 =   ([FWS] 1*(comment [FWS])) / FWS
 pub fn cfws<I: U8Input>(i: I) -> SimpleResult<I, Vec<I::Buffer>> {
+    // TODO: Thread this vec through more - maybe scan instead of many1?
+    let mut into: Vec<I::Buffer> = Vec::with_capacity(10);
     or(i,
        |i| {
-           option(i, fws, vec!()).bind(|i, buf1| {
+           maybe_fws(i, into).bind(|i, buf1| {
                many1(i, |i| {
                    comment(i).then(|i| {
                        option(i, |i| {
-                           fws(i)
+                           fws(i, vec!())
                        }, vec!())
                    })
                }).map(|mut vs: Vec<Vec<I::Buffer>>| {
@@ -259,7 +322,7 @@ pub fn cfws<I: U8Input>(i: I) -> SimpleResult<I, Vec<I::Buffer>> {
                })
            })
        },
-       fws)
+       |i| fws(i, vec!()))
 }
 
 pub fn drop_cfws<I: U8Input>(i: I) -> SimpleResult<I, ()> {
@@ -477,7 +540,7 @@ pub fn quoted_string<I: U8Input>(i: I) -> SimpleResult<I, Vec<I::Buffer>> {
     option(i, cfws, vec!()).bind(|i, cfws_bytes_pre| {
         dquote(i).then(|i| {
             many(i, |i| {
-                option(i, fws, vec!()).bind(|i, mut fws_bytes| {
+                option(i, |i| fws(i, vec!()), vec!()).bind(|i, mut fws_bytes| {
                     // NOTE: Take advantage of the buffer
                     matched_by(i, |i| {
                         skip_many1(i, qcontent)
@@ -491,7 +554,7 @@ pub fn quoted_string<I: U8Input>(i: I) -> SimpleResult<I, Vec<I::Buffer>> {
                 bufs.into_iter().flat_map(|v| v).collect()
 
             }).bind(|i, buf: Vec<I::Buffer>| {
-                option(i, fws, vec!()).bind(|i, fws_bytes| {
+                option(i, |i| fws(i, vec!()), vec!()).bind(|i, fws_bytes| {
                     dquote(i).then(|i| {
                         option(i, cfws, vec!()).bind(|i, cfws_bytes_post| {
                             let v = vec!(buf, fws_bytes, cfws_bytes_post).into_iter().flat_map(|v| v).collect();
@@ -667,7 +730,7 @@ fn test_date_time() {
 // day-of-week     =   ([FWS] day-name) / obs-day-of-week
 pub fn day_of_week<I: U8Input>(i: I) -> SimpleResult<I, Day> {
     or(i, 
-       |i| option(i, fws, vec!()).then(day_name),
+       |i| option(i, drop_fws, ()).then(day_name),
        obs_day_of_week)
 }
 
@@ -726,9 +789,9 @@ fn test_date() {
 pub fn day<I: U8Input>(i: I) -> SimpleResult<I, usize> {
     or(i,
        |i| {
-           option(i, fws, vec!()).then(|i| {
+           option(i, drop_fws, ()).then(|i| {
                parse_digits(i, (1..3)).bind(|i, d| {
-                   fws(i).then(|i| {
+                   drop_fws(i).then(|i| {
                        i.ret(d)
                    })
                })
@@ -773,7 +836,7 @@ fn test_month() {
 // year            =   (FWS 4*DIGIT FWS) / obs-year
 pub fn year<I: U8Input>(i: I) -> SimpleResult<I, usize> {
     or(i,
-       |i| fws(i).then(|i| parse_digits(i, (4..))),
+       |i| drop_fws(i).then(|i| parse_digits(i, (4..))),
        obs_year)
 }
 
@@ -862,7 +925,7 @@ pub fn second<I: U8Input>(i: I) -> SimpleResult<I, usize> {
 pub fn zone<I: U8Input>(i: I) -> SimpleResult<I, FixedOffset> {
     or(i,
        |i| {
-           fws(i).then(|i| {
+           drop_fws(i).then(|i| {
                or(i, |i| token(i, b'+'), |i| token(i, b'-')).bind(|i, s| {
                    parse_digits(i, 2).bind(|i, offset_h: i32| {
                        parse_digits(i, 2).bind(|i, offset_m: i32| {
@@ -1528,15 +1591,17 @@ pub fn msg_id<I: U8Input>(i: I) -> SimpleResult<I, MessageID> {
         token(i, b'<').then(|i| {
             option(i, |i| {
                 id_left(i).bind(|i, l| {
-                    token(i, b'@').then(|i| i.ret(l.into_iter().fold(Bytes::empty(), |l, r| l.concat(&Bytes::from_slice(&r.into_vec())))))
+                    token(i, b'@').then(|i| {
+                        i.ret(Some(unchecked_string_from_bufs::<I>(l)))
+                    })
                 })
-            }, Bytes::empty()).bind(|i, l| {
+            }, None).bind(|i, l| {
                 id_right(i).bind(|i, r| {
                     token(i, b'>').then(|i| {
                         option(i, drop_cfws, ()).then(|i| {
                             let message_id = MessageID{
                                 id_left: l,
-                                id_right: Bytes::from_slice(&r.into_vec()),
+                                id_right: unsafe { String::from_utf8_unchecked(r.into_vec()) },
                             };
                             debug!("parsed msg-id");
 
@@ -1858,7 +1923,7 @@ pub fn obs_unstruct_crlf<I: U8Input>(i: I) -> SimpleResult<I, Vec<I::Buffer>> {
     many(i, |i| {
         or(i,
            |i| take_while1(i, |t| LF_OBS_UTEXT[t as usize]).map(|buf| vec!(buf)),
-           |i| or(i, fws, |i| many1_cr_not_lf(i).map(|v| vec!(v))))
+           |i| or(i, |i| fws(i, vec!()), |i| many1_cr_not_lf(i).map(|v| vec!(v))))
     }).bind(|i, segments: Vec<Vec<I::Buffer>>| {
         crlf(i).then(|i| {
             i.ret(segments.into_iter().flat_map(|v| v).collect())
@@ -1957,6 +2022,15 @@ pub fn obs_fws<I: U8Input>(i: I) -> SimpleResult<I, Vec<I::Buffer>> {
         })
     })
 }
+pub fn drop_obs_fws<I: U8Input>(i: I) -> SimpleResult<I, ()> {
+    skip_many1(i, wsp).then(|i| {
+        skip_many(i, |i| {
+            crlf(i).then(|i| {
+                skip_many1(i, wsp).map(|_| ())
+            })
+        })
+    })
+}
 
 // obs-day-of-week =   [CFWS] day-name [CFWS]
 pub fn obs_day_of_week<I: U8Input>(i: I) -> SimpleResult<I, Day> {
@@ -2048,7 +2122,7 @@ pub fn obs_second<I: U8Input>(i: I) -> SimpleResult<I, usize> {
 //    
 // NOTE: Modifying to allow preceeding FWS, adding 'UTC'
 pub fn obs_zone<I: U8Input>(i: I) -> SimpleResult<I, FixedOffset> {
-    fws(i).then(|i| {
+    drop_fws(i).then(|i| {
         or(i, |i| string(i, b"UT").then(|i| i.ret(0)),
         |i| or(i, |i| string(i, b"GMT").then(|i| i.ret(0)),
         |i| or(i, |i| string(i, b"UTC").then(|i| i.ret(0)),
