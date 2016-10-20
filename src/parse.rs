@@ -53,14 +53,59 @@ pub fn main() {
 fn output_message<I: U8Input>(m: Message<I>, parsed_field_names: &HashSet<String>) {
     for field in m.fields.iter() {
         match field {
+            &Field::Date(ref v) =>  {
+                if v.date_time().is_raw() {
+                    error!("failed to parse Date: {}", v.date_time().raw());
+                }
+            },
+            &Field::From(ref v) => {
+                if v.addresses().is_raw() {
+                    error!("failed to parse From: {}", v.addresses().raw());
+                }
+            },
+            &Field::Sender(ref v) => {
+                if v.address().is_raw() {
+                    error!("failed to parse Sender: {}", v.address().raw());
+                }
+            },
+            &Field::ReplyTo(ref v) => {
+                if v.addresses().is_raw() {
+                    error!("failed to parse Reply-To: {}", v.addresses().raw());
+                }
+            },
+            &Field::To(ref v) => {
+                if v.addresses().is_raw() {
+                    error!("failed to parse To: {}", v.addresses().raw());
+                }
+            },
+            &Field::Cc(ref v) => {
+                if v.addresses().is_raw() {
+                    error!("failed to parse Cc: {}", v.addresses().raw());
+                }
+            },
+            &Field::MessageID(ref v) => {
+                if v.message_id().is_raw() {
+                    error!("failed to parse Message-ID: {}", v.message_id().raw());
+                }
+            },
+            &Field::InReplyTo(ref v) => {
+                if v.message_ids().is_raw() {
+                    error!("failed to parse In-Reply-To: {}", v.message_ids().raw());
+                }
+            },
+            &Field::References(ref v) => {
+                if v.message_ids().is_raw() {
+                    error!("failed to parse References: {}", v.message_ids().raw());
+                }
+            },
             &Field::Optional(ref n, ref f) => {
                 if parsed_field_names.contains(&n.to_lowercase()) {
                     error!("failed to parse {}: {}", n, f.to_string());
                 } else {
-                    debug!("(unstructured) {}: {}", n, f.to_string());
+                    debug!("-> (unstructured) {}: {}", n, f.to_string());
                 }
             },
-            _ => debug!("{:?}", field),
+            _ => debug!("-> {:?}", field),
         }
     }
     debug!("Body bytes: {}", m.body().len());

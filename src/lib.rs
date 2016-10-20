@@ -10,6 +10,7 @@ extern crate log;
 
 // pub mod rfc2822;
 pub mod rfc5322;
+pub mod mime;
 mod util;
 
 use std::fmt;
@@ -55,6 +56,14 @@ impl<T> FieldValue<T> {
             FieldValue::Ok(v) => v,
             FieldValue::Raw(b) => panic!("unwrap raw value {:?}", b),
             FieldValue::Missing => panic!("unwrap missing value"),
+        }
+    }
+    // TODO: Return Vec<u8>
+    pub fn raw(&self) -> String {
+        match self {
+            &FieldValue::Raw(ref b) => String::from_utf8(b.buf().bytes().to_vec()).unwrap(),
+            &FieldValue::Ok(_) => panic!("raw called on parsed value"),
+            &FieldValue::Missing => panic!("raw called on missing value"),
         }
     }
 }
@@ -231,6 +240,7 @@ pub enum Field<I: U8Input> {
     ResentBcc(AddressesField<I>),
     ResentReplyTo(AddressesField<I>),
     ResentMessageID(MessageIDField<I>),
+    MIMEVersion(MIMEVersionField),
     Optional(String, UnstructuredField<I>),
 }
 
@@ -260,6 +270,7 @@ impl<I: U8Input> fmt::Debug for Field<I> {
             &Field::ResentBcc(ref v) =>         write!(f, "Resent-Bcc: {}", v.to_string()),
             &Field::ResentReplyTo(ref v) =>     write!(f, "Resent-Reply-To: {}", v.to_string()),
             &Field::ResentMessageID(ref v) =>   write!(f, "Resent-Message-ID: {}", v.to_string()),
+            &Field::MIMEVersion(ref v) =>       write!(f, "MIME-Version: {}.{}", v.top_version, v.sub_version),
             &Field::Optional(ref n, ref v) =>   write!(f, "{}: {}", n, v.to_string()),
         }
     }
@@ -458,6 +469,12 @@ impl<I: U8Input> fmt::Debug for MessageIDsField<I> {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         write!(f, "{}", self.to_string())
     }
+}
+
+#[derive(PartialEq)]
+pub struct MIMEVersionField {
+    pub top_version: usize,
+    pub sub_version: usize,
 }
 
 #[derive(PartialEq)]
