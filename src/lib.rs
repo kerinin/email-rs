@@ -14,6 +14,7 @@ pub mod mime;
 mod util;
 
 use std::fmt;
+use std::collections::HashMap;
 
 use chrono::datetime::DateTime;
 use chrono::offset::fixed::FixedOffset;
@@ -25,6 +26,7 @@ use chomp::parsers::*;
 use chomp::combinators::*;
 
 use rfc5322::*;
+use mime::*;
 
 pub enum FieldValue<T> {
     Ok(T),
@@ -241,6 +243,7 @@ pub enum Field<I: U8Input> {
     ResentReplyTo(AddressesField<I>),
     ResentMessageID(MessageIDField<I>),
     MIMEVersion(MIMEVersionField),
+    ContentType(ContentTypeField),
     Optional(String, UnstructuredField<I>),
 }
 
@@ -271,6 +274,8 @@ impl<I: U8Input> fmt::Debug for Field<I> {
             &Field::ResentReplyTo(ref v) =>     write!(f, "Resent-Reply-To: {}", v.to_string()),
             &Field::ResentMessageID(ref v) =>   write!(f, "Resent-Message-ID: {}", v.to_string()),
             &Field::MIMEVersion(ref v) =>       write!(f, "MIME-Version: {}.{}", v.top_version, v.sub_version),
+            // TODO: write params too
+            &Field::ContentType(ref v) =>       write!(f, "Content-Type: {}/{}", v.top_level.to_string(), v.sub_level.to_string()),
             &Field::Optional(ref n, ref v) =>   write!(f, "{}: {}", n, v.to_string()),
         }
     }
@@ -475,6 +480,13 @@ impl<I: U8Input> fmt::Debug for MessageIDsField<I> {
 pub struct MIMEVersionField {
     pub top_version: usize,
     pub sub_version: usize,
+}
+
+#[derive(PartialEq)]
+pub struct ContentTypeField {
+    pub top_level: TopLevel,
+    pub sub_level: SubLevel,
+    pub params: HashMap<String, Vec<u8>>,
 }
 
 #[derive(PartialEq)]
