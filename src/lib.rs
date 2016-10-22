@@ -242,8 +242,11 @@ pub enum Field<I: U8Input> {
     ResentBcc(AddressesField<I>),
     ResentReplyTo(AddressesField<I>),
     ResentMessageID(MessageIDField<I>),
-    MIMEVersion(MIMEVersionField),
+    MIMEVersion(VersionField),
     ContentType(ContentTypeField),
+    ContentTransferEncoding(EncodingField),
+    ContentID(MessageIDField<I>),
+    ContentDescription(TextField<I>),
     Optional(String, UnstructuredField<I>),
 }
 
@@ -274,8 +277,18 @@ impl<I: U8Input> fmt::Debug for Field<I> {
             &Field::ResentReplyTo(ref v) =>     write!(f, "Resent-Reply-To: {}", v.to_string()),
             &Field::ResentMessageID(ref v) =>   write!(f, "Resent-Message-ID: {}", v.to_string()),
             &Field::MIMEVersion(ref v) =>       write!(f, "MIME-Version: {}.{}", v.top_version, v.sub_version),
-            // TODO: write params too
-            &Field::ContentType(ref v) =>       write!(f, "Content-Type: {}/{}", v.top_level.to_string(), v.sub_level.to_string()),
+            &Field::ContentType(ref v) => {
+                write!(
+                    f, 
+                    "Content-Type: {}/{}{}", 
+                    v.top_level.to_string(), 
+                    v.sub_level.to_string(),
+                    v.params.iter().map(|(k, v)| format!("; {}={}", k, String::from_utf8_lossy(v))).collect::<Vec<String>>().join(""),
+                    )
+            },
+            &Field::ContentTransferEncoding(ref v) => write!(f, "Content-Transfer-Encoding: {}", v.encoding.to_string()),
+            &Field::ContentID(ref v) =>         write!(f, "Content-ID: {}", v.to_string()),
+            &Field::ContentDescription(ref v) => write!(f, "Content-Description: {}", v.to_string()),
             &Field::Optional(ref n, ref v) =>   write!(f, "{}: {}", n, v.to_string()),
         }
     }
@@ -477,7 +490,7 @@ impl<I: U8Input> fmt::Debug for MessageIDsField<I> {
 }
 
 #[derive(PartialEq)]
-pub struct MIMEVersionField {
+pub struct VersionField {
     pub top_version: usize,
     pub sub_version: usize,
 }
@@ -487,6 +500,11 @@ pub struct ContentTypeField {
     pub top_level: TopLevel,
     pub sub_level: SubLevel,
     pub params: HashMap<String, Vec<u8>>,
+}
+
+#[derive(PartialEq)]
+pub struct EncodingField {
+    pub encoding: Encoding,
 }
 
 #[derive(PartialEq)]
@@ -503,6 +521,27 @@ impl<I: U8Input> UnstructuredField<I> {
 }
 
 impl<I: U8Input> fmt::Debug for UnstructuredField<I> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        write!(f, "{}", self.to_string())
+    }
+}
+
+#[derive(PartialEq)]
+pub struct TextField<I: U8Input> {
+    data: I::Buffer,
+}
+
+impl<I: U8Input> TextField<I> {
+    pub fn to_string(&self) -> String {
+        let data = self.data.to_vec();
+        match parse_only(|i| matched_by(i, text), &data[..]) {
+            Ok((s,_)) => unsafe { String::from_utf8_unchecked(s.to_vec()) },
+            Err(_) => "".to_string(),
+        }
+    }
+}
+
+impl<I: U8Input> fmt::Debug for TextField<I> {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         write!(f, "{}", self.to_string())
     }
