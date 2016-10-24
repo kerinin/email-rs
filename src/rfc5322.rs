@@ -1,4 +1,5 @@
 //! RFC5322 specifies message bodies (supercedes RFC2822)
+//! https://tools.ietf.org/html/rfc5322
 
 use chrono::Datelike;
 use chrono::datetime::DateTime;

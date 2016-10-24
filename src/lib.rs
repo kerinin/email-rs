@@ -10,7 +10,7 @@ extern crate log;
 
 // pub mod rfc2822;
 pub mod rfc5322;
-pub mod mime;
+pub mod rfc2045;
 mod util;
 
 use std::fmt;
@@ -26,7 +26,7 @@ use chomp::parsers::*;
 use chomp::combinators::*;
 
 use rfc5322::*;
-use mime::*;
+use rfc2045::*;
 
 pub enum FieldValue<T> {
     Ok(T),
@@ -105,6 +105,13 @@ pub struct MessageID {
     pub id_right: String,
 }
 
+// NOTE: Consider modeling body explicitly, and decoding based on content type.
+// This would allow handling:
+// * text/plain prohibits isolated CR or LF, and treats CRLF as the only valid
+//   line break.  text/enriched (I think) allows CRLF anywhere and is 
+//   non-semantic, because line breaks are "encoded" and need decoding.
+// * character encoding, at least by reporting it, possibly with helpers for
+//   transcoding to utf8
 #[derive(Debug, PartialEq)]
 pub struct Message<I: U8Input> {
     // pub traces: Vec<Trace>,
