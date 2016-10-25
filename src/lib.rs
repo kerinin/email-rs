@@ -11,6 +11,7 @@ extern crate log;
 // pub mod rfc2822;
 pub mod rfc5322;
 pub mod rfc2045;
+pub mod rfc2046;
 mod util;
 
 use std::fmt;
